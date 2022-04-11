@@ -1,12 +1,19 @@
 Update the .xml file with information relevant to your already-running
 Icecast server, such as source password, etc.
 
-The <intake> and <metadata> sections should be left alone.  The binaries
-those sections reference are here; they are symlinks that point to the main
-jockeycall executable.
+- If you are not familiar with Icecast, and/or don't have a working Icecast
+  server yet, you should get that up and running before continuing with
+  jockeycall.
+
+The <intake> and <metadata> sections should be left alone.
+
+The binaries in those sections should be symlinks to the jockeycall.pl
+executable.  If ezstream complains about not being able to find it, you may
+need to specify the absolute path to jockeycall.pl.
 
 The jockeycall executable will take appropriate action based on the name of
 the executable and the value of the JOCKEYCALL_CHANNEL environment variable.
+
 That environment variable can be set by you or more easily by issuing a
 "jockeycall.pl transmit /path/to/channel" command.
 

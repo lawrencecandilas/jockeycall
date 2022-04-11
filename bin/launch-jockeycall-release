@@ -1,6 +1,0 @@
-#!/bin/sh
-export JOCKEYCALL_CONF=
-LCWD=`pwd`
-cd /opt/jockeycall/bin
-./jockeycall.pl $@
-cd $LCWD

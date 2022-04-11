@@ -1,6 +1,0 @@
-#!/bin/sh
-export JOCKEYCALL_CONF=devel
-LCWD=`pwd`
-cd ~/devel/jockeycall-dev/bin
-./jockeycall.pl $@
-cd $LCWD

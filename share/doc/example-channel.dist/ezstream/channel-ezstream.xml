@@ -86,7 +86,7 @@
   </decoders>
 
  <encoders>
-  <encoder> <name>growl</name>
+  <encoder> <name>jockeycall</name>
    <format>MP3</format>
    <!-- This is the re-encoding part of the pipeline.
 
