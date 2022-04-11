@@ -1,0 +1,174 @@
+# jockeycall channel configuration file for example-station
+#
+# Keep in mind: jockeycall's whole job is to look at a directory containing an
+# arrangement of schedules, according to the current time and history of 
+# played items, and output the path of an MP3 that should be played.
+# - This is called 'delivering a track.'
+# - This integrates with ezstream--an instance of ezstream which should be
+# pointed to a working icecast server.
+
+# Configuration options:
+
+# schedules_at: Directory that contains schedules.
+#
+# - This is relative to the path jockeycall gets as the first argument, which
+#   is the channel directory.
+#
+#   - For example, if you call jockeycall with the following:
+#     `jockeycall /usr/share/jockeycall/example-station ...`
+#     then jockeycall looks at 
+#      "/usr/share/jockeycall/example-station/schedule"
+#     for schedules.
+#
+# - If this directory is empty, jockeycall will go into intermission mode.
+#
+schedules_at schedule
+
+# subdir_wday_XXX: Weekday subdirectories beneath schedule directory.
+#
+# - These are relative to the schedule directory above.
+#
+#   - For example, if you call jockeycall with the following:
+#     `jockeycall /usr/share/jockeycall/example-station ...`
+#     then jockeycall looks at 
+#      "/usr/share/jockeycall/example-station/schedule/normal/weekday"
+#     if "normal/weekday" is defined for one of the days of the week below.
+#
+subdir_wday_sun weekend
+subdir_wday_mon weekday
+subdir_wday_tue weekday
+subdir_wday_wed weekday
+subdir_wday_thu weekday
+subdir_wday_fri weekday
+subdir_wday_sat weekend
+
+# day_flip_at: When should the next day start?
+#
+# - What time of day that jockeycall starts looking at the next day's schedule.
+#   Most people consider, for example, 12:01 am Sunday part of Saturday night,
+#   and don't consider it Sunday until they go to bed at 2am and wake up the
+#   next day.
+#
+# - Time must be in 1XXXX where XXXX is a 24-hour time, beginning with 0 if
+#   necessary.  E.g. 10200 is 2:00am, 11300 is 1:00pm.
+#
+day_flip_at 10400
+
+# intermission_at: Directory containing intermission tracks
+#
+# - This directory should contain tracks that are delivered during
+#   intermission.
+# - jockeycall will go into intermission if a timeslot ends.
+#   - This happens if is set to not repeat and it's not time for the next
+#     timeslot yet.
+#   - Also happens if it's toward the end of a timeslot and jockeycall can't
+#     find a track that will fit in the alloted time.
+#   - Also happens if you simply don't define any schedules.
+#
+# - If you have no schedules and no intermission tracks, jockeycall will 
+#   select the "Under Maintenance" track as defined below.
+#
+intermission_at intermission
+
+# vars_at: directory to hold state between calls.
+# 
+# - Must be writeable by the user jockeycall is running as.
+# - Data maintained includes play history for the current timeslot.
+#
+vars_at vars
+
+# metadatadir_at: directory to hold track metadata.
+#
+# - Must be writeable by the user jockeycall is running as.
+# - jockeycall keeps some info on each song, such as duration, number of times
+#   played, and a "weight" factor.  This will eventually be replaced by a
+#   database.
+# - jockeycall uses the external mp3info command (needs to be installed) to
+#   find out MP3 durations.
+#
+metadatadir metadata
+
+# oob_queue: directory to hold out-of-band queue.
+#
+# - Must be writeable by the user jockeycall is running as.
+# - Interruptions to jockeycall's schedule processing flow are handled as
+#   "Out of Band" tracks.
+# - An event can place references to "Out Of Band" tracks on this queue and
+#   subsequent jockeycall invocations will deliver those when called instead
+#   of selecting from the schedule (or intermission).
+# - Out of Band tracks are removed from queue once played.
+# - jockeycall periodics use the OOB queue to work.  Periodics will have
+#   tracks that need to be delivered at various intervals, e.g. every 30 
+#   minutes, every 20 minutes, etc.  Typical case would be for commercials
+#   or station IDs.
+#
+oob_queue_at oob_queue
+
+# logs_at: directory to hold logs.
+#
+# - Must be writeable by the user jockeycall is running as.
+# - jockeycall writes 2 daily logs:
+#   - "public" logs that are simply a list of times and tracks played,
+#     periodics are not included.
+#   - "priviate" logs that include periodics and event markers, which can be
+#     used to verify schedules and periodics are happening as designed.
+#
+logs_at logs
+
+# random_percent: chance of random track
+#
+# - A directory called 'random' can exist in a schedule's timeslot.
+# - This is the percentage of time you'd like a track to be picked from the
+#   'random' directory instead of the schedule's current timeslot.
+# - Nothing happens if there is no `random` directory, it's empty, or all
+#   tracks in the random directory have already been played in that timeslot.
+#
+random_percent 2
+
+# track_td: technical difficulties track
+#
+# - This is relative to the path jockeycall gets as the first argument, which
+#   is the channel directory.
+#
+# - If jockeycall runs into trouble it will deliver this track, such as not
+#   being able to open or read a file.
+# - This track is also delivered if there are no schedules and no tracks in the
+#   intermissions.
+#
+track_td alerts/td.mp3
+
+# track_um: under maintenance track
+#
+# - This is relative to the path jockeycall gets as the first argument, which
+#   is the channel directory.
+#
+# - This track will be delivered over and over if jockeycall is in maintenance
+#   mode.
+#
+track_um alerts/um.mp3
+
+# yellow_zone_mins: define yellow zone
+# red_zone_mins: define red zone
+#
+# Yellow and red zones are an amount of time before the current timeslot ends.
+#
+# - Intermissions don't have zones.
+#
+# The yellow zone will happen X minutes before the end of the timeslot.
+# The red zone will will happen Y minutes before the end of the timeslot.
+# You want X to be bigger than Y.
+#
+# Default is the yellow zone starts 12 minutes before schedule end, and the
+# red zone starts 8 minutes before schedule end.
+#
+# - When a timeslot is in the yellow or red zone:
+#   Existing operations are cancelled.
+#   No new ones can be started.
+#
+# - If you put 2 timeslots together where they have less than X or Y minutes,
+#   the timeslot will start in that zone from the first track played.
+#
+# - Periodic directories yellow-mark and red-mark are triggered when
+#   thresholds are crossed.
+yellow_zone_mins 12
+red_zone_mins 8

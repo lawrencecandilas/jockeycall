@@ -1,0 +1,20 @@
+The example show provided with this distribution utilizes audio from various
+sources.  Below is details on those sources and any applicable licensing
+details.
+
+These MP3s ...
+
+ 1. HoliznaRAPS - Good Kids - Instrumental.mp3
+ 2. Mr. Smith - Hellafunk.mp3
+
+were obtained from the following URL ...
+
+ * https://freemusicarchive.org/genre/Instrumental
+
+and were identified from the URL as released under Creative Commons CC-BY 4.0
+license, which permits redistribution.  The MP3s in this distribution are
+released under the same license.
+
+The link to the license is here:
+https://creativecommons.org/licenses/by/4.0/
+

@@ -1,0 +1,81 @@
+The example station provided with this distribution utilizes audio from
+various sources.  Below is details on those sources and any applicable
+licensing details
+
+Directory: alerts
+
+ Example alerts and station ID was generated from the following website:
+ * https://freetts.com
+ An account was not created or used to generate the audio.
+
+ If you wish to use the example alerts and station ID in your own project, you
+ may be required to adhere to the Free TTS conditions and terms of service.
+ The Acceptable Use Policy is reproduced below for reference.
+
+ If you can't adhere to Free TTS terms, do not use the files in the alert
+ folder - make your own.
+
+=== Begin FreeTTS AUP ===
+ Short: When using the Service, you will abide by the applicable laws, rules
+ and regulations, and by any usage guidelines FreeTTS may convey to you from
+ time to time.
+
+ You may not access or use the Service for any illegal or abusive purposes, or
+ to develop or create a similar or competitive product or service to the
+ Service. You will be responsible for all acts and omissions associated with
+ your access and use of the Service and the access and use of the Service by
+ employees, agents, contractors, end-users and any other third party who may
+ access or use the Service on your behalf, or at your permission ("Authorized
+ Users").
+
+ Any use of your account is subject to your sole responsibility. You will not,
+ and be responsible that you will not, access and use the Service (including
+ as to upload or transmit any Contributed Content) for any illegal, harmful,
+ fraudulent, offensive purpose or to transmit, store, display, distribute or
+ otherwise make available content that is infringing upon any third party
+ rights, illegal, harmful, indecent, obscene, defamatory, libelous, harassing,
+ threatening, fraudulent, offensive or inconsistent with the generally
+ accepted practices of the Internet community, including without limitation
+ promoting or facilitating pornography, offering or disseminating fraudulent
+ goods, services, schemes, or promotions, spamming, make-money-fast schemes,
+ ponzi and pyramid schemes, phishing, or pharming, and use of content or
+ technology that may damage, interfere with, surreptitiously intercept, or
+ expropriate any system, program, or data, including viruses, Trojan horses,
+ worms or time bombs. 
+=== End FreeTTS AUP ===
+
+Directory: intermission
+
+ All MP3s in the intermission folder are from https://freemusicpublicdomain.com
+ and appear here under the Creative Commons CC-BY 3.0 license.
+
+ Creative Commons CC-BY 3.0 allows copying and remixing for any reason,
+ including commercial purposes.
+
+ Below are required statements per licensing terms:
+
+  Urban Sunrise
+   Exzel Music Publishing (freemusicpublicdomain.com)
+   Licensed under Creative Commons: By Attribution 3.0
+   http://creativecommons.org/licenses/by/3.0/
+
+  City Lights
+   Exzel Music Publishing (freemusicpublicdomain.com)
+   Licensed under Creative Commons: By Attribution 3.0
+   http://creativecommons.org/licenses/by/3.0/
+
+  What A Beautiful Sunset
+   Exzel Music Publishing (freemusicpublicdomain.com)
+   Licensed under Creative Commons: By Attribution 3.0
+   http://creativecommons.org/licenses/by/3.0/
+
+  Images
+   Exzel Music Publishing (freemusicpublicdomain.com)
+   Licensed under Creative Commons: By Attribution 3.0
+   http://creativecommons.org/licenses/by/3.0/
+
+  Concerto A 4 Violini No 2
+   Exzel Music Publishing (freemusicpublicdomain.com)
+   Licensed under Creative Commons: By Attribution 3.0
+   http://creativecommons.org/licenses/by/3.0/
+

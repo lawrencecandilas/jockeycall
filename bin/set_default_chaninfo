@@ -1,0 +1,4 @@
+#!/bin/bash
+
+printf "<p>Jockeycall Example Station</p>\n" | ./chaninfo_update-devel.pl flip-default
+

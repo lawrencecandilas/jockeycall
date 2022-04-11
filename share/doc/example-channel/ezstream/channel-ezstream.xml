@@ -1,0 +1,116 @@
+<ezstream>
+     
+ <!-- Example ezstream.xml file for jockeycall -->
+ <!-- Change this stuff according to your channel needs. --> 
+ <streams>
+  <stream> <name>default</name>
+   <mountpoint>example</mountpoint>
+   <public>0</public>
+   <intake>jockeycall</intake>
+   <server>local</server>
+   <format>MP3</format>
+   <encoder>jockeycall</encoder>
+   <stream_name>Jockeycall Example Channel</stream_name>
+   <stream_genre>Instrumental</stream_genre>
+   <stream_description>Royalty-Free Creative-Common Licensed Music</stream_description>
+   <stream_quality>64Kpbs</stream_quality>
+   <stream_samplerate>44100</stream_samplerate>
+   <stream_channels>2</stream_channels>
+   </stream>
+  </streams>
+
+ <intakes>
+  <intake> <name>jockeycall</name>
+   <type>program</type> 
+   <filename>./jockeycall-ezstream-intake-call.pl</filename>
+   <shuffle>0</shuffle>
+   <stream_once>0</stream_once>
+   </intake>	 
+  </intakes>
+
+ <metadata>
+  <!-- format_str -->
+  <program>./jockeycall-ezstream-metadata-call.pl</program>
+  <refresh_interval>-1</refresh_interval>
+  <normalize_strings>1</normalize_strings>
+  <no_updates>0</no_updates>
+  </metadata>
+
+ <servers>
+  <server> <name>local</name>
+   <protocol>HTTP</protocol>
+   <!-- Replace ## with the IP address of your Icecast server -->
+    <hostname>##</hostname>
+   <!-- Replace ## with the port your Icecast server is listening to fori
+	source audio.  This will be different than the port the Icecast server
+	uses for clients -->
+    <port>##</port>
+    <user>source</user>
+   <!-- Replace ## with your Icecast server's source audio password -->
+    <password>##</password>
+    <reconnect_attempts>255</reconnect_attempts>
+   <!-- tls Required -->
+   <!-- tls_cipher_suite -->
+   <!-- ca_dir -->
+   <!-- ca_file -->
+   <!-- client_cert -->
+   </server>
+  </servers>
+
+ <decoders>
+  <decoder> <name>jockeycall</name>
+   <file_ext>.mp3</file_ext>
+    <!-- ezstream is meant to stream files raw - but usually you want to 
+	re-encode them.  
+
+	Why? 
+
+	One reason is that changing MP3 bit rates seems to make clients
+	disconnect and have to reconnect - so unless your MP3 files are all
+	encoded at the exact same bitrate you'll at the very least want to
+	reencode to a Constant Bit Rate (CBR).
+
+	Other reasons include applying effects, such as audio compression to
+	make things sound more like a radio station.	
+	
+	And before you re-encode, you have to decode ... so ...
+
+ 	You'll need to install madplay.
+
+	This will make ezstream pipe all incoming data it reads from local
+	MP3s through madplay, which will convert it to raw audio.  The
+	encoding parts of the pipeline need raw audio.
+	-->
+    <program>madplay -b 16 -R 44100 -S -o raw:- @T@</program> 
+   </decoder>
+  </decoders>
+
+ <encoders>
+  <encoder> <name>growl</name>
+   <format>MP3</format>
+   <!-- This is the re-encoding part of the pipeline.
+
+	The re-encoding part uses 2 programs:
+
+	- sox to apply effects (compression or "compand" per example below)
+	- lame to covert to MP3
+
+	The "cbr XXX" part of the lame command controls the outgoing bit rate
+	which controls the audio quality and network demand.  The bitrate
+	setting above is just a display name.
+
+	You'll need to install sox and lame.
+
+	This is a command line that stdin is being piped into.
+	What this part pipeline spits out is sent to Icecast.
+
+	madplay, sox, and lame are what consume the CPU while broadcasting.
+	Likely can all be avoided if you want to pre-process all your MP3s.
+	-->
+   <program>
+    sox -t raw -r 44100 -c 2 -b 16 -e signed - -t raw - compand 0.3,1 6:-70,-60,-20 -5 -90 0.2 | lame --quiet --preset cbr 256 -r -s 44.1 --bitwidth 16 - -
+    </program>
+   </encoder>
+  </encoders>
+
+ </ezstream>

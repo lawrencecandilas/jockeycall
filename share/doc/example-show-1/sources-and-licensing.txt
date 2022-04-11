@@ -1,0 +1,16 @@
+The example show provided with this distribution utilizes audio from various
+sources.  Below is details on those sources and any applicable licensing
+details.
+
+These MP3s ...
+
+ 1. David H. Porter - Schubert's Sonata in B Flat, D. 960 - II. Andante sostenuto.mp3
+ 2. David H. Porter - Schubert's Sonata in B Flat, D. 960 - III. Scherzo (Allegro vivace con delicatezza).mp3
+ 3. David H. Porter - Schubert's Sonata in B Flat, D. 960 - I. Molto moderato.mp3
+
+were obtained from the following URL ...
+
+ * https://freemusicarchive.org/curator/MusOpen
+
+and were identified from the URL as public domain.
+
