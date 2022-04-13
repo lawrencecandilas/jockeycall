@@ -34,7 +34,7 @@ my $parameter;
 # It all begins with a channel.  All things that make up a channel are in a
 # given directory. 
 #
-# $ENV['JOCKEYCALL_CHANNEL'] is that directory, unless the subcommand is
+# $ENV{'JOCKEYCALL_CHANNEL'} is that directory, unless the subcommand is
 # "transmit" - then it's $ARGV[1]
 # 
 # Why is an environment variable used?  ezstream wackiness. 
@@ -138,7 +138,8 @@ Subcommands::process_subcommand_other_than_next($channel,$command,$parameter);
 
 # Secret option - presence of this parameter allows forcing a banner update
 # manually from the command line.
-if($ARGV[1]=='1'){BannerUpdate::set_doUpdate_flag();}
+#if(){BannerUpdate::set_doUpdate_flag();}
+
 
 # Looking like we might actually do something productive.
 # Good time to acquire lock (or fail).
@@ -384,14 +385,14 @@ if(get_key('timeslot-event-counter','') eq 2)
 my @timeslot_dir_history=();
 if($FLAG_new_timeslot==1)
 {
-	@timeslot_dir_history=set_key('timeslot-dir-history','');
-	clear_object('timeslot-event-counter');
-	debug_out "reset timeslot-dir-history";
+	@timeslot_dir_history=DataMoving::set_key('timeslot-dir-history','');
+	DataMoving::clear_object('timeslot-event-counter');
+	Debug::debug_out "reset timeslot-dir-history";
 }
 
 ANOTHER_TIMESLOT_DIR:
 
-@timeslot_dir_history=read_list("timeslot-dir-history","");
+@timeslot_dir_history=DataMoving::read_list("timeslot-dir-history","");
 Debug::debug_out scalar(@timeslot_dir_history)." items in timeslot-dir-history";
 
 my @current_timeslot_dirs=();

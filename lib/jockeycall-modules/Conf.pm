@@ -1,15 +1,58 @@
 package Conf;
+use Data::Dumper;
 use File::Basename;
 use parent 'Exporter';
+require 'Utility.pm';
 require 'Debug.pm';
 
 # Configuration read, parse, assertions, and ownership (%Conf::conf)
+# Also configuration definition
 
+# Hash that defines valid configuration options for channels
+$possible_channel_conf_item{'subdir_wday_sun'}	='chanscheddir-required,mapto:subdir_wday0';
+$possible_channel_conf_item{'subdir_wday_mon'}	='chanscheddir-required,mapto:subdir_wday1';
+$possible_channel_conf_item{'subdir_wday_tue'}	='chanscheddir-required,mapto:subdir_wday2';
+$possible_channel_conf_item{'subdir_wday_wed'}	='chanscheddir-required,mapto:subdir_wday3';
+$possible_channel_conf_item{'subdir_wday_thu'}	='chanscheddir-required,mapto:subdir_wday4';
+$possible_channel_conf_item{'subdir_wday_fri'}	='chanscheddir-required,mapto:subdir_wday5';
+$possible_channel_conf_item{'subdir_wday_sat'}	='chanscheddir-required,mapto:subdir_wday6';
+$possible_channel_conf_item{'day_flip_at'}	='time-optional';
+$possible_channel_conf_item{'track_td'}		='chanfile-required';
+$possible_channel_conf_item{'track_um'}		='chanfile-required';
+$possible_channel_conf_item{'schedules_at'}	='chandir-required';
+$possible_channel_conf_item{'vars_at'}		='chandir-required';
+$possible_channel_conf_item{'metadatadir'}	='chandir-required';
+$possible_channel_conf_item{'oob_queue_at'}	='chandir-required';
+$possible_channel_conf_item{'intermission_at'}	='chandir-required';
+$possible_channel_conf_item{'logs_at'}		='chandir-required';
+$possible_channel_conf_item{'random_percent'}	='number-optional,range:1-100';
+$possible_channel_conf_item{'yellow_zone_mins'}	='number-optional,range:1-60';
+$possible_channel_conf_item{'red_zone_mins'}	='number-optional,range:1-60';
+# Hash that defines valid configuration options for global jockeycall.conf 
+ $possible_global_conf_item{'jockeycall_bin_curl'}
+						='exe-optional,nobannersifbad';
+ $possible_global_conf_item{'jockeycall_bin_mp3info'}
+						='exe-required';
+ $possible_global_conf_item{'jockeycall_bin_ezstream'}
+						='exe-optional';
+ $possible_global_conf_item{'jockeycall_banner_service_enabled'}
+						='boolean-required';
+ $possible_global_conf_item{'jockeycall_banner_base_path'}
+						='dir-optional,nobannersifbad';
+ $possible_global_conf_item{'jockeycall_banner_service_autoflip_every'}
+						='number-optional,range:1-720';
+ $possible_global_conf_item{'jockeycall_banner_service_url'}
+						='url-optional,nobannersifbad';
+ $possible_global_conf_item{'jockeycall_banner_service_key'}
+						='string-optional,nobannersifbad';
+
+# This holds the current config as read from files
 our %conf;
 
 # Validity flag.  If this is 0 after calling read routines, the configuration
 # couldn't be read or there was a problem, and main should abort.
 $conf{'valid'}=0;
+
 # This is 1 if banners should be disabled.  This can be true if explicitly
 # specified by the config, or forced true if there is an error with banner
 # related config items.
@@ -23,10 +66,7 @@ our $disable_banners=0;
 # in this module and should be called very early by main.
 $conf{'0'}='';
 
-$conf{'SCD'}='';
-$conf{'VRD'}='';
-
-# Default schedule subdirectories for days of the week
+# Defaults
 # Path is prefixed by 'schedules_at'
 $conf{'subdir_wday_sun'}='normal/sunday';
 $conf{'subdir_wday_mon'}='normal/weekday';
@@ -35,10 +75,8 @@ $conf{'subdir_wday_wed'}='normal/weekday';
 $conf{'subdir_wday_thu'}='normal/weekday';
 $conf{'subdir_wday_fri'}='normal/weekday';
 $conf{'subdir_wday_sat'}='normal/saturday';
-
 # Default time that weekdays 'change'
 $conf{'day_flip_at'}='10500';
-
 # Holiday schedule subdirectories
 $conf{'subdir_hday_0101'}='normal/weekday';
 $conf{'subdir_hday_0214'}='normal/weekday';
@@ -46,29 +84,28 @@ $conf{'subdir_hday_0604'}='normal/weekday';
 $conf{'subdir_hday_1124'}='normal/weekday';
 $conf{'subdir_hday_1225'}='normal/weekday';
 $conf{'subdir_hday_1231'}='normal/weekday';
-
 # Default random_percent
 $conf{'random_percent'}=97;
-
 # Default schedule zone threshoolds
 $conf{'yellow_zone_mins'}=12;
 $conf{'red_zone_mins'}=8;
 
+# Environment-controlled stuff
 # On module instantiation, we'll pull in some environment variables,
 # validate them, and copy them to conf vars.
 #
 # TODO: The validation above
-
 $conf{'env_CHANNEL'}=$ENV{'JOCKEYCALL_CHANNEL'};
-
+#
 # JOCKEYCALL_FLAVOR environment variable should be:
 # 0 for production running from /bin
 # 1 for production running from /opt/jockeycall
 # 2 for development
 $conf{'env_FLAVOR'}=$ENV{'JOCKEYCALL_FLAVOR'};
-
+#
 # JOCKEYCALL_TRACE should be 1 to enable trace messages.
 $conf{'env_TRACE'}=$ENV{'JOCKEYCALL_TRACE'};
+
 
 sub sift_conf_line
 {
@@ -85,7 +122,7 @@ sub sift_conf_line
 #
 # TODO: Might put some processing in here that deals with #'s trailing 
 # the configuration value.  Currently not supported.
-
+#
 	my $confline=$_[0];
 	my @confline=('','');
 
@@ -101,6 +138,11 @@ sub sift_conf_line
 }
 
 
+# These are set by setdirs() below.
+#
+$conf{'SCD'}='';
+$conf{'VRD'}='';
+#
 sub setdirs
 {
 # Parameters/info
@@ -172,6 +214,189 @@ sub check_conf_metadatadir
 }
 
 
+sub validate_and_set_conf_line
+{
+#
+# Perform validation on one configuration line item.
+#
+# $_[0]: Configuration item name
+# $_[1]: Configuration item value
+# $_[2]: 1 if channel configuration, 0 if global configuration
+# Returns 1 if OK, 0 if invalid
+# 
+# Package-level variables used:
+#  %possible_channel_conf_item; %possible_global_conf_item
+#
+# Will report errors via Debug module.
+
+	return 1 if($_[0] eq ''); # might be a blank line, not an error
+
+	my $validator;
+	if($_[2]==1)
+	{
+		$validator=$possible_channel_conf_item{$_[0]};
+	}else{
+		$validator=$possible_global_conf_item{$_[0]};
+	}
+
+	if($validator eq '')
+	{
+		Debug::conf_error_out "-- unknown configuration item \"".$_[1]."\" encountered";
+		return 0;
+	}
+
+	# Time to chop up the validator for processing
+	# - some validators MAY have 2 parts separated by commas
+	my($validator_part1,$validator_part2)=split(',',$validator,2);
+
+	# - the left part MUST always have 2 parts separated by dashs
+	my($validator_type,$validator_need)=split('-',$validator_part1,2);
+
+	# - if need is 'optional', then it's OK if value is blank.
+	if(($_[1] eq '')&&($validator_need eq 'optional'))
+	{
+		return 1;
+	}
+	# - if need is 'required', then it's NOT OK if value is blank.
+	if(($_[1] eq '')&&($validator_need eq 'required'))
+	{
+		Debug::conf_error_out "-- $_[0]: requires a value and one isn't specified.";
+		return 0;
+	}
+
+	# - ... continuing with chopping up the validator
+	#   the right part MAY have 2 parts separated by colons
+	my($validator_qualifier,$validator_params)=split(':',$validator_part2,2);
+
+	# - and the "validator_params" MAY have 2 parts separated by dashes
+	my($validator_param1,$validator_param2)=split('-',$validator_params,2);
+
+	# Ok, validator is chopped up.
+
+	$validator_recognized=0;
+
+	if(($validator_type eq 'dir')||($validator_type eq 'chandir')||($validator_type eq 'chanscheddir'))
+	{
+		$validator_recognized=1;
+		my $dir_to_check;
+		if($validator_type eq 'dir')		{$dir_to_check=$_[1];}
+		if($validator_type eq 'chandir')	{$dir_to_check=$conf{'basedir'}.'/'.$_[1];}
+		if($validator_type eq 'chanscheddir')	{$dir_to_check=$conf{'basedir'}.'/'.$conf{'schedules_at'}."/".$_[1];}
+		if(! -d $dir_to_check)
+		{
+			if($validator_qualifier eq 'nobannersifbad')
+			{
+				$disable_banners=1;
+				Debug::debug_out "-- $_[0]: \"".$dir_to_check."\" not found or not a directory - disabling banners";
+				return 1;
+			}else{
+				Debug::conf_error_out "-- $_[0]: \"".$dir_to_check."\" not found or not a directory";
+				return 0;
+			}
+		}
+	}
+
+	if($validator_type eq 'chanfile')
+	{
+		$validator_recognized=1;
+		if(! -e $conf{'basedir'}.'/'.$_[1])
+		{
+			Debug::conf_error_out "-- $_[0]: \"".$_[1]."\" not found or inaccessible";
+			return 0;
+		}
+	}
+
+	if($validator_type eq 'url')
+	{
+		$validator_recognized=1;
+		my $okflag=0;
+		if(rindex($_[1],'https://')==0){$okflag=1;}
+		if(rindex($_[1],'http://')==0){$okflag=1;}
+		if(!$okflag)
+		{
+			Debug::conf_error_out "-- $_[0]: \"".$_[1]."\" isn't a valid URL";
+			return 0;
+		}
+	}
+
+	if($validator_type eq 'time')
+	{
+		$validator_recognized=1;
+		if(!Utility::check_datestring($_[1]))
+		{
+			Debug::conf_error_out "-- $_[0]: \"".$_[1]."\" isn't a valid datestring 1HHMM";
+			return 0;
+		}
+	}
+
+	if($validator_type eq 'number')
+	{
+		$validator_recognized=1;
+		if(!($_[1] =~ /^\d*$/))
+		{
+			Debug::conf_error_out "-- $_[0]: \"".$_[1]."\" has stuff other than digits in it";
+		}
+	        if($validator_qualifier eq 'range')
+        	{
+	                if(($_[1]<$validator_param1)||($_[1]>$validator_param2))
+        	        {
+                	        Debug::conf_error_out "-- $_[0]: $_[1] is out of the range $validator_param1-$validator_param2";
+                        	return 0;
+	                }
+	        }
+	}
+
+	if($validator_type eq 'exe')
+	{
+		$validator_recognized=1;
+		if(! -x $_[1])
+		{
+                        if($validator_qualifier eq 'nobannersifbad')
+                        {
+                                $disable_banners=1;
+                                Debug::debug_out "-- $_[0]: \"".$_[1]."\" not found or not an executable file - disabling banners";
+                                return 1;
+                        }else{
+				Debug::conf_error_out "-- $_[0]: \"".$_[1]."\" not found or not an executable file";
+				return 0;
+			}
+		}
+	}
+
+	if($validator_type eq 'boolean')
+	{
+		$validator_recognized=1;
+		if(($_[1] ne '0')&&($_[1] ne '1'))
+		{
+			Debug::conf_error_out "-- $_[0]: \"".$_[1]."\" isn't 0 or 1";
+			return 0;
+		}
+	}
+
+	if($validator_type eq 'string')
+	{
+		$validator_recognized=1;
+	}
+
+	if($validator_recognized==0)
+	{
+		Debug::conf_error_out "-- unrecognized validator type \"$_[0]\" - report this as a bug unless you modified the code";
+		return 0;
+	}
+
+	if($validator_qualifier eq 'mapto')
+	{
+		$conf{$validator_param1}=$_[1];
+	}
+	else
+	{
+		$conf{$_[0]}=$_[1];
+	}
+
+	return 1;
+}
+
+
 sub read_jockeycallconf
 {
 #
@@ -208,6 +433,7 @@ sub read_jockeycallconf
 
         open(my $jockeycallconf_file_handle,'<',$jockeycallconf_file); ##or fail "open of $jockeycallconf_file failed";
 
+	my $conf_errors=0;
         while(<$jockeycallconf_file_handle>)
         {
                 my $line=$_;
@@ -220,105 +446,28 @@ sub read_jockeycallconf
 		# TODO: something to account for comments in the middle of lines
                 my($first,$rest)=split(' ',$line,2);
 
-# known configuration items
-                if($first eq   'at_exe')
-			{$conf{'at_exe'}=$rest; next;}
-                if($first eq   'jockeycall_bin_curl')
-			{$conf{'jockeycall_bin_curl'}=$rest; next;}
-                if($first eq   'jockeycall_bin_mp3info')
-			{$conf{'jockeycall_bin_mp3info'}=$rest; next;}
-                if($first eq   'jockeycall_bin_ezstream')
-			{$conf{'jockeycall_bin_ezstream'}=$rest; next;}
-                if($first eq   'jockeycall_banner_service_enabled')
-			{$conf{'jockeycall_banner_service_enaled'}=$rest; next;}
-                if($first eq   'jockeycall_banner_base_path')
-			{$conf{'jockeycall_banner_base_path'}=$rest; next;}
-                if($first eq   'jockeycall_banner_service_autoflip_every')
-			{$conf{'jockeycall_banner_service_autoflip_every'}=$rest; next;}
-                if($first eq   'jockeycall_banner_service_enabled')
-			{$conf{'jockeycall_banner_service_enabled'}=$rest; next;}
-                if($first eq   'jockeycall_banner_service_url')
-			{$conf{'jockeycall_banner_service_url'}=$rest; next;}
-                if($first eq   'jockeycall_banner_service_key')
-			{$conf{'jockeycall_banner_service_key'}=$rest; next;}
-                Debug::conf_error_out "-- unknown jockeycallconf configuration item $first found in file";
+                if(validate_and_set_conf_line($first,$rest,0)!=1){$conf_errors++;}
         }
 
-        close($jockeycallconf_file_handle);
-
-# Delicious validation for global configuration
-# ----------------------------------------------
-	my $jockeycallconf_error_flag=0;
-	$disable_banners=0;
-
-	if($conf{'jockeycall_bin_curl'} eq '')
-	{
-		$jockeycall_bin_curl='/bin/curl';
-	}
-	if($conf{'jockeycall_bin_ezstream'} eq '')
-	{
-		$jockeycall_bin_ezstream='/usr/bin/ezstream';
-	}
-
-# this is NOT working to find ezstream at /usr/local/bin/ezstream
-# ??? TODO: Find out why
-#	if(! -e $conf{'$jockeycall_bin_ezstream'})
-#	{
-#		Debug::error_out "ezstream binary \"".$conf{'jockeycall_bin_ezstream'}."\" not found, transmit subcommand won't work";
-#		Debug::error_out "fix that by installing ezstream, your distro likely has it";
-#	}
-
-	if($conf{'jockeycall_bin_mp3info'} eq '')
-	{
-                Debug::conf_error_out "jockeycall_bin_mp3info not specified";
-		$jockeycallconf_error_flag=1;
-	}
-	elsif(! -e $conf{'jockeycall_bin_mp3info'})
-	{
-                Debug::conf_error_out "jockeycall_bin_mp3info \"".$conf{'jockeycall_bin_mp3info'}."\" not found";
-		$jockeycallconf_error_flag=1;
-	}
-
-	if(! -e $conf{'jockeycall_bin_curl'})
-	{
-		Debug::error_out "curl binary \"".$conf{'jockeycall_bin_curl'}."\" not found, won't do banner operations";
-		Debug::error_out "fix that by installing curl, your distro likely has it";
-		$disable_banners=1;		
-	}
-	if(! -e $conf{'$banner_service_base_path'})
-	{
-		Debug::error_out "banner base path \"".$conf{'$banner_service_base_path'}."\" not found, won't do banner operations";
-		$disable_banners=1;		
-	}	
-	if($conf{'jockeycall_banner_service_url'} eq '')
-	{
-		Debug::error_out "banner service url is blank or undefined, won't do banner operations";
-		$disable_banners=1;		
-	}
-	if($conf{'jockeycall_banner_service_key'} eq '')
-	{
-		Debug::error_out "banner service key is blank or undefined, won't do banner operations";
-		$disable_banners=1;		
-	}
-	if($conf{'jockeycall_banner_service_enabled'}!=1)
-	{
-		$disable_banners=1;
-	}
-
+#	print Dumper(\%conf);
+        close($conf_file_handle);
 
 # report any errors.
 #
-        if($conf_error_flag==1)
+        if($conf_errors!=0)
         {
-                Debug::conf_error_out "configuration failed validation";
+                Debug::conf_error_out "jockeycall.conf configuration failed validation, $conf_errors error(s)";
                 return 0
         }
         else
         {
                 $conf{'valid'}=1;
         }
-        return 1;
 
+# misc stuff
+	if($conf{'jockeycall_banner_service_enabled'}=0){$banners_disabled=1;}
+
+        return 1;
 }
 
 
@@ -334,8 +483,7 @@ sub read_conf
 # $_[0]: Channel configuration file
 #
 # Package-level variables used:
-#  A lot because we're setting variables according to a configuration file.
-#  $conf{'basedir'}'s pretty critical.
+#  $conf{'basedir'}
 
 	my $conf_file=$_[0];
 
@@ -353,179 +501,22 @@ sub read_conf
 
 	open(my $conf_file_handle,'<',$conf_file); ##or fail "open of $conf_file failed";
 
+	my $conf_errors=0;
 	while(<$conf_file_handle>)
 	{
 		my $line=$_;
 		my($first,$rest)=sift_conf_line($line);
 		next if($first eq '');
-		#$line=~s/^\s+|\s+$//g;
-#
-#		next if($line eq ''); # skip blank lines
-#		next if($line =~ /^\s*#/); # skip lines beginning with # - comments
-#
-#		# all configuration lines are a token, space, then value.
-#		# TODO: something to account for comments in the middle of lines
-#		my($first,$rest)=split(' ',$line,2);
-
-# known configuration items
-		if($first eq 'subdir_wday_sun')	{$conf{'subdir_wday0'}=$rest; next;}
-		if($first eq 'subdir_wday_mon')	{$conf{'subdir_wday1'}=$rest; next;}
-		if($first eq 'subdir_wday_tue')	{$conf{'subdir_wday2'}=$rest; next;}
-		if($first eq 'subdir_wday_wed')	{$conf{'subdir_wday3'}=$rest; next;}
-		if($first eq 'subdir_wday_thu')	{$conf{'subdir_wday4'}=$rest; next;}
-		if($first eq 'subdir_wday_fri')	{$conf{'subdir_wday5'}=$rest; next;}
-		if($first eq 'subdir_wday_sat')	{$conf{'subdir_wday6'}=$rest; next;}
-		if($first eq 'day_flip_at')	{$conf{'day_flip_at'}=$rest; next;}
-
-		if($first eq 'track_td')	{$conf{'track_td'}=$rest; next;}
-		if($first eq 'track_um')	{$conf{'track_um'}=$rest; next;}
-
-		if($first eq 'schedules_at')	{$conf{'schedules_at'}=$rest; next;}
-		if($first eq 'vars_at')		{$conf{'vars_at'}=$rest; next;}
-		if($first eq 'metadatadir')	{$conf{'metadatadir'}=$rest; next;}
-		if($first eq 'oob_queue_at')	{$conf{'oob_queue_at'}=$rest; next;}
-		if($first eq 'intermission_at')	{$conf{'intermission_at'}=$rest; next;}
-		if($first eq 'logs_at')		{$conf{'logs_at'}=$rest; next;}
-
-		if($first eq 'random_percent')	{$conf{'random_percent'}=$rest; next;}
-
-		if($first eq 'yellow_zone_mins'){$conf{'yellow_zone_mins'}=$rest; next;}
-		if($first eq 'red_zone_mins')	{$conf{'red_zone_mins'}=$rest; next;}
-
-		Debug::conf_error_out "-- unknown channel configuration item $first found in file";
+		if(validate_and_set_conf_line($first,$rest,1)!=1){$conf_errors++;}
 	}
 
 	close($conf_file_handle);
 
-# Delicious validation for channel configuration
-# ----------------------------------------------
-	$conf_error_flag=0;
-
-# - conf_basedir
-	if($conf{'basedir'} eq '')
-	{
-		Debug::conf_error_out "channel conf problem: basedir doesn't appear in configuration file or had no value";
-		$conf_error_flag=1;
-	}
-	elsif(! -e $conf{'basedir'})
-	{
-		Debug::conf_error_out "channel conf problem: basedir \"$conf{'basedir'}\" not found";
-		$conf_error_flag=1;
-	}
-#
-# - conf_track_td
-	if($conf{'track_td'} eq '')
-	{
-		Debug::conf_error_out "channel conf problem: track_td doesn't appear in configuration file or had no value";
-		$conf_error_flag=1;
-	}
-	elsif(! -e "$conf{'basedir'}/$conf{'track_td'}")
-	{
-		Debug::conf_error_out "channel conf problem: track_td file \"$conf{'track_td'}\" inaccessible or doesn't exist";
-		$conf_error_flag=1;
-	}
-#
-# - conf_track_um
-	if($conf{'track_um'} eq '')
-	{
-		Debug::conf_error_out "channel conf problem: track_um doesn't appear in configuration file or had no value";
-		$conf_error_flag=1;
-	}
-	elsif(! -e "$conf{'basedir'}/$conf{'track_um'}")
-	{
-		Debug::conf_error_out "channel conf problem: track_um file \"$conf{'track_um'}\" inaccessible or doesn't exist";
-		$conf_error_flag=1;
-	}
-#
-# - conf_vars_at
-	if($conf{'vars_at'} eq '')
-	{
-		Debug::conf_error_out "channel conf problem: vars_at doesn't appear in configuration file or had no value";
-		$conf_error_flag=1;
-	}
-	elsif(! -e "$conf{'basedir'}/$conf{'vars_at'}")
-	{
-		Debug::conf_error_out "channel conf problem: vars_at dir \"$conf{'basedir'}/$conf{'vars_at'}\" inaccessible or doesn't exist";
-		$conf_error_flag=1;
-	}
-#
-# - conf_schedules_at
-	if($conf{'schedules_at'} eq '')
-	{
-		Debug::conf_error_out "channel conf problem: schedules_at doesn't appear in configuration file or had no value";
-		$conf_error_flag=1;
-	}
-	elsif(! -e "$conf{'basedir'}/$conf{'schedules_at'}")
-	{
-		Debug::conf_error_out "channel conf problem: schedules_at dir \"$conf{'basedir'}/$conf{'schedules_at'}\" inaccessible or doesn't exist";
-		$conf_error_flag=1;
-	}
-#
-# - conf_metadatadir
-	if($conf{'metadatadir'} eq '')
-	{
-		Debug::conf_error_out "channel conf problem: metadatadir doesn't appear in configuration file or had no value";
-		$conf_error_flag=1;
-	}
-	elsif(! -e "$conf{'basedir'}/$conf{'metadatadir'}")
-	{
-		Debug::conf_error_out "channel conf problem: metadatadir \"$conf{'basedir'}/$conf{'metadatadir'}\" inaccessible or doesn't exist";
-		$conf_error_flag=1;
-	}
-#
-# - conf_oob_queue_at
-	if($conf{'oob_queue_at'} eq '')
-	{
-		Debug::conf_error_out "channel conf problem: oob_queue_at doesn't appear in configuration file or had no value";
-		$conf_error_flag=1;
-	}
-	elsif(! -e "$conf{'basedir'}/$conf{'oob_queue_at'}")
-	{
-		Debug::conf_error_out "channel conf problem: oob_queue_at dir \"$conf{'basedir'}/$conf{'oob_queue_at'}\" inaccessible or doesn't exist";
-		$conf_error_flag=1;
-	}
-#
-# - conf_intermission_at
-	if($conf{'intermission_at'} eq '')
-	{
-		Debug::conf_error_out "channel conf problem: intermission_at doesn't appear in configuration file or had no value";
-		$conf_error_flag=1;
-	}
-	elsif(! -e "$conf{'basedir'}/$conf{'intermission_at'}")
-	{
-		Debug::conf_error_out "channel conf problem: intermission_at dir \"$conf{'basedir'}/$conf{'intermission_at'}\" inaccessible or doesn't exist";
-		$conf_error_flag=1;
-	}
-#
-# - logs_at
-	if($conf{'logs_at'} eq '')
-	{
-		$conf{'logs_at'}='.';
-	}
-	elsif(! -e "$conf{'basedir'}/$conf{'logs_at'}")
-	{
-		Debug::conf_error_out "channel conf problem: logs_at dir \"$conf{'basedir'}/$conf{'logs_at'}\" inaccessible or doesn't exist";
-		$conf_error_flag=1;
-	}
-#
-# - random_percent
-# TODO: make sure is numeric and a sane value
-
-#
-# - yellow_zone_mins
-# TODO: make sure is numeric and a sane value
-
-#
-# - red_zone_mins
-# TODO: make sure is numeric and a sane value
-
-
-#
 # report any errors.
 #
-        if($conf_error_flag==1)
+        if($conf_errors!=0)
         {
-                Debug::conf_error_out "configuration failed validation";
+                Debug::conf_error_out "channel configuration failed validation, $conf_errors error(s)";
                 return 0
         }
         else
@@ -533,6 +524,7 @@ sub read_conf
                 $conf{'valid'}=1;
         }
 	return 1;
+
 }
 
 1;
