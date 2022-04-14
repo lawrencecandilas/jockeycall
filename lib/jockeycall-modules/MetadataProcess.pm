@@ -21,12 +21,12 @@ sub metadata_process
 
 # Parameters/info
 #
-# Converts $_[0], assumed to be a filename of a song, to a hash.
-# Then retrieves metadata record for that hash, parses the records and
+# Converts $_[0], assumed to be a filename of a song, to a md5hash.
+# Then retrieves metadata record for that md5hash, parses the records and
 # distributes the values among the variables pointed to by references.
 # A database would probably be much better.
 #
-# If hash is found in provided history, it returns without doing
+# If md5hash is found in provided history, it returns without doing
 # anything else except setting $_[5] to 1.
 #
 # $_[0]: full path of filename
@@ -42,11 +42,11 @@ sub metadata_process
 #  ./mp3info-static-noncurses
 #  (should be in same dir as jockeycall.pl)
 
-	my $hash=main::md5_hex($_[0]);
+	my $md5hash=main::md5_hex($_[0]);
 
-	if(grep( /^$hash$/, @{$_[1]} ))
+	if(grep( /^$md5hash$/, @{$_[1]} ))
 	{
-		Debug::trace_out "track $hash: $_[0] found in history, skipped";
+		Debug::trace_out "track $md5hash: $_[0] found in history, skipped";
 		${$_[5]}=1;
 		return 0;
 	}
@@ -55,18 +55,16 @@ sub metadata_process
 # and weight (w) from it.
 
 	my $flag_set_metadata=0;
-	my $ct=0; my $cl=0; my $cw=0;
-	my $metadata=DataMoving::get_metadata($hash);
-	my @m=split /\//,$metadata;
 
-	foreach my $mx(@m)
-	{
-		# c: play count
-		if(substr($mx,0,2) eq 'c:'){$ct=substr($mx,2);}
-		# l: length in seconds
-		if(substr($mx,0,2) eq 'l:')
-		{		
-			$cl=substr($mx,2);
+	my %metadata=DataMoving::get_metadata($md5hash);
+
+	my $cc=0;
+	$cc=$metadata{'c'};
+	my $cl=0;
+	$cl=$metadata{'l'};
+	my $cw=0;
+	$cw=$metadata{'w'};
+
 			if($cl==0)
 			{
 				Debug::trace_out "command is $Conf::conf{'jockeycall_bin_mp3info'} -p \"%S\" \"$_[0]\"";
@@ -77,15 +75,13 @@ sub metadata_process
 				$cl=$seconds;
 				$flag_set_metadata=1;
 			}
-		}
 
-	# w: weight value
-	if(substr($mx,0,2) eq 'w:'){$cw=substr($mx,2);}
-	}
+	${$_[2]}=$cc; ${$_[3]}=$cl; ${$_[4]}=$cw;
 
-	${$_[2]}=$ct; ${$_[3]}=$cl; ${$_[4]}=$cw;
-	DataMoving::set_metadata($hash,"c:$ct/l:$cl/w:$cl")if($flag_set_metadata==1);
-	return $hash;
+	%metadata=('c'=>$cc,'l'=>$cl,'w'=>$cw);
+	DataMoving::set_metadata($md5hash,\%metadata)if($flag_set_metadata==1);
+
+	return $md5hash;
 
 }
 

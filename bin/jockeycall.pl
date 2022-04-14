@@ -2,6 +2,9 @@
 
 # This is Jockeycall
 
+#use strict;
+#use warnings; 
+
 use POSIX qw(strftime);
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 use File::Basename;
@@ -39,6 +42,7 @@ my $parameter;
 # 
 # Why is an environment variable used?  ezstream wackiness. 
 #
+my $channel;
 if($ARGV[0] eq 'transmit')
 {
 	if($ARGV[1] eq ""){Utility::usage; exit 0;}
@@ -108,7 +112,7 @@ use Events;
 #	Tried it did not work.  Hence this workaround.
 #
 # $inm is also used later in main.
-$inm=$Conf::conf{'basedir'}.'/'.$Conf::conf{'intermission_at'};
+my $inm=$Conf::conf{'basedir'}.'/'.$Conf::conf{'intermission_at'};
 Events::set_inm($inm); # ::Events
 
 # Tell IO module where to write play log files.
@@ -122,8 +126,8 @@ Debug::debug_out "lock code is $Concurrency::concurrency_lock_code";
 
 # TESTMODE, if enabled, will report in compact form what track is selected
 # and also allow datestring to be specified in command line.
-$TESTMODE=0;
-$TESTMODE_datestring;
+my $TESTMODE=0;
+my $TESTMODE_datestring;
 
 # Tell BannerUpdate module where our channel lives so it can get banners and
 # channel information.
@@ -163,6 +167,7 @@ Operation::set_channel($channel);
 
 
 # Figure out current datestring.
+my $datestring;
 if($TESTMODE==1)
 # TESTMODE=1 means we get that from the command line.
 {
@@ -178,15 +183,15 @@ else
 # Fetch datestring of previous call.
 # Need to use root key (*_rkey() calls) until we determine a schedule
 # directory.
-$last_datestring=DataMoving::get_rkey('last-datestring',0);
+my $last_datestring=DataMoving::get_rkey('last-datestring',0);
 DataMoving::set_rkey('last-datestring',$datestring);
 
 Debug::debug_out "current datestring $datestring, last_datestring $last_datestring";
 
 # --- New day check.
 # Get current day number and day number of previous call.
-@times=localtime; $currentday=$times[7];
-$lastday=DataMoving::get_rkey('last-day',0);
+my @times=localtime; my $currentday=$times[7];
+my $lastday=DataMoving::get_rkey('last-day',0);
 DataMoving::set_rkey('last-day',$currentday);
 
 # If current and previous day number are different, it's a new day.
@@ -197,8 +202,8 @@ if($lastday!=$currentday)
 
 # --- New DOW (day-of-the-week) check.
 # Get current DOW number and DOW number of previous call.
-$currentdow=$times[6];
-$lastdow=DataMoving::get_rkey('last-day-of-week',$currentdow);
+my $currentdow=$times[6];
+my $lastdow=DataMoving::get_rkey('last-day-of-week',$currentdow);
 DataMoving::set_rkey('last-day-of-week',$currentdow);
 
 # --- Check to see if we are in a new DOW.
@@ -220,7 +225,7 @@ if($datestring>$Conf::conf{'flip_day_at'})
 
 # Point ourselves to the correct schedule directories.
 if(!Conf::setdirs($currentdow))
- {technical_difficulties; succeed;exit 0;}
+ {DeliverTrack::technical_difficulties; Concurrency::succeed;exit 0;}
 
 # Check for any channel-level periodics; if any, they will add to OOB queue.  
 # Delivery of any found will start a little later below once we check for
@@ -243,14 +248,14 @@ my $schedule_zone=0;
 # ...but instead we use $Conf::conf{'SCD'} - that is set by Conf::setdirs.
 # This allows us to change the schedule directory according to specific days
 # of the week, or even holidays.
-$scd="$Conf::conf{'SCD'}";
+my $scd="$Conf::conf{'SCD'}";
 
 # Actually read schedule
 DataMoving::read_schedule_dir($scd,\@schedule);
 
 # Dummy data so we can detect if these values have been modified or not.
-$current_timeslot='zzzzz';
-$next_timeslot='zzzzz';
+my $current_timeslot='zzzzz';
+my $next_timeslot='zzzzz';
 
 # Empty schedule? Intermission then.
 if(scalar(@schedule)==0)
@@ -281,6 +286,8 @@ $current_timeslot=$schedule_sorted[-1];
 # There's a 11pm timeslot also defined.  At 5am we should still be
 # playing the 11pm timeslot songs.
 
+my $this_timeslot;
+
 foreach $this_timeslot(@schedule_sorted)
 {
 	Debug::trace_out ".. \'$this_timeslot\' >= \'$datestring\' ?";
@@ -290,8 +297,6 @@ foreach $this_timeslot(@schedule_sorted)
  
 Debug::debug_out "this call is in timeslot $current_timeslot";
 Debug::debug_out "scanning $scd for next timeslot";
-
-$next_timeslot=0;
 
 push @schedule_sorted,$schedule_sorted[0]+2400;
 foreach $this_timeslot(@schedule_sorted)
@@ -303,7 +308,7 @@ foreach $this_timeslot(@schedule_sorted)
 
 Debug::debug_out "next timeslot is $next_timeslot";
 
-$difference=(Utility::datestring_to_minutes($next_timeslot)-Utility::datestring_to_minutes($datestring));
+my $difference=(Utility::datestring_to_minutes($next_timeslot)-Utility::datestring_to_minutes($datestring));
 Debug::debug_out "$difference minutes until next schedule";
 
 # Get record of the last timeslot we were in.
@@ -319,7 +324,7 @@ DataMoving::set_key("last_timeslot",$current_timeslot);
 # Then, deliver from OOB queue if any found.
 # This will also deliver channel-level periodics as well.
 my $timeslot_periodics_dir="$Conf::conf{'SCD'}/$current_timeslot/periodic";
-$oob_flag+=OOB::periodic_process($timeslot_periodics_dir,$last_datestring,$datestring);
+my $oob_flag+=OOB::periodic_process($timeslot_periodics_dir,$last_datestring,$datestring);
 if($oob_flag>0){OOB::oob_process_if_applicable();};
 
 # Are we in a new timeslot?
@@ -390,12 +395,34 @@ if($FLAG_new_timeslot==1)
 	Debug::debug_out "reset timeslot-dir-history";
 }
 
+my @current_timeslot_dirs;
+my @current_timeslot_dirs_sorted;
+my @timeslot_history;
+my $tsd;
+my $tsd_param_ordered;
+my $tsd_param_cycle;
+my $tsd_param_newhistory;
+my $tsd_param_limit;
+my @tsd_params;
+my $rdm;
+my $flag_dup;
+my @t; 
+my @h; 
+my @c; 
+my @l; 
+my @w; 
+my @z; 
+my $last_mode;
+my $current_mode;
+my $distribution;
+my $chosen_track;
+
 ANOTHER_TIMESLOT_DIR:
 
 @timeslot_dir_history=DataMoving::read_list("timeslot-dir-history","");
 Debug::debug_out scalar(@timeslot_dir_history)." items in timeslot-dir-history";
 
-my @current_timeslot_dirs=();
+@current_timeslot_dirs=();
 # Current timeslot directory
 $tsd="$Conf::conf{'SCD'}/$current_timeslot";
 # and tell BannerUpdate that too
@@ -425,8 +452,8 @@ if(scalar(@current_timeslot_dirs)==0)
 }
 
 # Sort it and lob the one off the top
-my @current_timeslot_dirs_sorted=sort{$a cmp $b} @current_timeslot_dirs;
-my $tsd=$current_timeslot_dirs_sorted[0];
+@current_timeslot_dirs_sorted=sort{$a cmp $b} @current_timeslot_dirs;
+$tsd=$current_timeslot_dirs_sorted[0];
 Debug::trace_out "tsd is $tsd";
 
 # Extract parameters of timeslot (part of timeslot directory name)\
@@ -434,7 +461,7 @@ $tsd_param_ordered=0;
 $tsd_param_cycle=0;
 $tsd_param_newhistory=0;
 $tsd_param_limit=99999;
-my @tsd_params=split /-/,$tsd;
+@tsd_params=split /-/,$tsd;
 # TODO: Handle this better.  Splitting $tsd on a dash could result in
 # 2,3,4 not containing the expected parameters, if any directories have
 # a dash in them.
@@ -477,13 +504,13 @@ TRY_AGAIN:
 # These arrays store data from timeslot and track metadata, as well as an
 # array to reference track order.
 
-my @t=(); # track
-my @h=(); # hash
-my @c=(); # play count
-my @l=(); # time of last play
-my @w=(); # weight
+@t=(); # track
+@h=(); # hash
+@c=(); # play count
+@l=(); # time of last play
+@w=(); # weight
 
-my @z=(); # order
+@z=(); # order
 
 $flag_dup=DataMoving::get_candidate_tracks($tsd,\@timeslot_history,\@t,\@h,\@c,\@l,\@w,\@z,abs($difference+$close_to_edge_adjustment),$schedule_zone);
 
@@ -535,7 +562,7 @@ $last_mode='unknown';
 $current_mode=DataMoving::get_key('current-mode');
 if($current_mode ne 'normal')
 {
-	if($last_mode='intermission')
+	if($last_mode eq 'intermission')
 	{
 		$last_mode=$current_mode;
 		$current_mode='normal';
@@ -555,8 +582,8 @@ if($tsd_param_ordered!=1)
 	# Sort @z references in order of @c (play count).
 	# Least played tracks will start at 1.
 	my $size=(@z)+1; my $min=0;
-	for($i=1;$i<$size;$i=$i+1){
-	 for($j=$i+1;$j<$size;$j=$j+1){
+	for(my $i=1;$i<$size;$i=$i+1){
+	 for(my $j=$i+1;$j<$size;$j=$j+1){
 	  if($c[$z[$j]]<$c[$z[$i]]){
 	   $min=$z[$j]; $z[$j]=$z[$i]; $z[$i]=$min;
 	   } } }
@@ -567,8 +594,8 @@ if($tsd_param_ordered==1)
 	# Sort @z references in order of @t (track name).
 	# Earliest in alphabet will be 1.
 	my $size=(@z)+1; my $min=0;
-	for($i=1;$i<$size;$i=$i+1){
-	 for($j=$i+1;$j<$size;$j=$j+1){
+	for(my $i=1;$i<$size;$i=$i+1){
+	 for(my $j=$i+1;$j<$size;$j=$j+1){
 	  if($t[$z[$j]] lt $t[$z[$i]]){
 	   $min=$z[$j]; $z[$j]=$z[$i]; $z[$i]=$min;
 	   } } }
@@ -580,6 +607,7 @@ Debug::trace_out "SORTED =======================================================
 
 if($tsd_param_ordered!=1)
 {
+	my $max;
 	# Pick a track randomly.
 	$distribution=int(rand(100));
 	if($distribution>75)
@@ -603,7 +631,7 @@ if($tsd_param_ordered==1)
 
 Debug::debug_out 'selected track '.$chosen_track.': '.$t[$z[$chosen_track]];
 
-DataMoving::set_metadata($h[$z[$chosen_track]],'c:'.($c[$z[$chosen_track]]+1).'/l:'.$l[$z[$chosen_track]].'/w:'.$w[$z[$chosen_track]]);
+DataMoving::set_metadata($h[$z[$chosen_track]],{'c'=>($c[$z[$chosen_track]]+1),'l'=>$l[$z[$chosen_track]],'w'=>$w[$z[$chosen_track]]});
 
 DataMoving::append_to_list('history',$h[$z[$chosen_track]]);
 
@@ -611,6 +639,10 @@ DeliverTrack::now_play("$tsd/$t[$z[$chosen_track]]",'',0);
 
 Concurrency::fail('DeliverTrack::now_play() returned for some reason.');
 exit 1;
+
+
+my @intermission_history;
+my $intermission_periodics_dir;
 
 INTERMISSION:
 # This point is reached (via goto, OMG) if we've played all tracks in
@@ -624,7 +656,7 @@ BannerUpdate::set_intermission_flag();
 BannerUpdate::set_timeslot($inm);
 
 # Check for any intermission periodics and deliver from OOB queue if any found
-my $intermission_periodics_dir="$inm/periodic";
+$intermission_periodics_dir="$inm/periodic";
 if(OOB::periodic_process($intermission_periodics_dir,$last_datestring,$datestring)>0){OOB::oob_process_if_applicable();};
 
 INTERMISSION_RETRY:
@@ -638,13 +670,13 @@ Debug::debug_out "intermission history has ".(scalar(@intermission_history))." e
 # These arrays store data from intermission slot and track metadata, as
 # well as an array to reference track order.
 
-my @t=(); # track
-my @h=(); # hash
-my @c=(); # play count
-my @l=(); # time of last play
-my @w=(); # weight
+@t=(); # track
+@h=(); # hash
+@c=(); # play count
+@l=(); # time of last play
+@w=(); # weight
 
-my @z=(); # order
+@z=(); # order
 
 $flag_dup=DataMoving::get_candidate_tracks($inm,\@intermission_history,\@t,\@h,\@c,\@l,\@w,\@z,99999,0);
 
@@ -696,9 +728,9 @@ else
 my $size=(@z)+1;
 my $min=0;
 
-for($i=1;$i<$size;$i=$i+1)
+for(my $i=1;$i<$size;$i=$i+1)
 {
-	for($j=$i+1;$j<$size;$j=$j+1){
+	for(my $j=$i+1;$j<$size;$j=$j+1){
 	 if($c[$z[$j]]<$c[$z[$i]]){
 	  $min=$z[$j];
 	  $z[$j]=$z[$i];
@@ -710,7 +742,7 @@ for($i=1;$i<$size;$i=$i+1)
 Debug::trace_out "SORTED ===============================================================\n";
 for(my $i=1;$i<=scalar(@t);$i++)
 {
-	Debug::trace_out $c[$z[$i]]."\t\t".$t[$z[$i]]."\n";
+	Debug::trace_out "count: ".$c[$z[$i]]." track:".$t[$z[$i]]." length:".$l[$z[$i]]."\n";
 }
 Debug::trace_out "SORTED ===============================================================\n";
 
@@ -718,26 +750,30 @@ Debug::trace_out "SORTED =======================================================
 # If there is more than one track ...
 if(scalar(@t)>1)
 {
-# ... then we pick one randomly.
-# We might pick from all tracks or just the bottom half.
-# (bottom half thing requires at least 3 tracks)
+	my $max;
+	# ... then we pick one randomly.
+	# We might pick from all tracks or just the bottom half.
+	# (bottom half thing requires at least 3 tracks)
 	my $previous_track=DataMoving::get_key("intermission-last-played-track");
 	Debug::debug_out "previous track: $previous_track";
 	$distribution=int(rand(100));
 	if(($distribution>75)or(scalar(@t)<3))
 	{
-# 25% of time, pick any track.
-# But: Do this no matter what if the number of tracks is less than 3.
+		# 25% of time, pick any track.
+		# But: Do this no matter what if the number of tracks is less than 3.
 		$max=scalar(@t);
 	}
 	else
 	{
-# 75% of time, pick from the "bottom half" least played.
+		# 75% of time, pick from the "bottom half" least played.
 		$max=int(scalar(@t)/2);
 	}
-# Make sure it doesn't match last track.
-	while(42)
+	# Make sure it doesn't match last track.
+	# Limit 10 tries.
+	my $tries=10;
+	while($tries!=0)
 	{
+		$tries--;
 		$chosen_track=int(rand($max))+1;
 		next if($h[$z[$chosen_track]] eq $previous_track);
 		last;
@@ -750,7 +786,7 @@ else
 
 Debug::debug_out "selected intermission track ".$chosen_track.": $t[$z[$chosen_track]], $h[$z[$chosen_track]]";
 
-DataMoving::set_metadata($h[$z[$chosen_track]],"c:".($c[$z[$chosen_track]]+1)."/l:".$l[$z[$chosen_track]]."/w:".$w[$z[$chosen_track]]);
+DataMoving::set_metadata($h[$z[$chosen_track]],{'c'=>($c[$z[$chosen_track]]+1),'l'=>$l[$z[$chosen_track]],'w'=>$w[$z[$chosen_track]]});
 DataMoving::append_to_list("intermission-history",$h[$z[$chosen_track]]);
 DataMoving::set_key("intermission-last-played-track",$h[$z[$chosen_track]]);
 

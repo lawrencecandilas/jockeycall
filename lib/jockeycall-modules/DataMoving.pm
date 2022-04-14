@@ -36,17 +36,11 @@ our $private_playlog_file;
 
 sub set_public_playlog_file
 {
-	if($_[0] eq '')
-	{
-	}
 	$public_playlog_file=$_[0];
 }
 
 sub set_private_playlog_file
 {
-	if($_[0] eq '')
-	{
-	}
 	$private_playlog_file=$_[0];
 }
 
@@ -145,7 +139,7 @@ sub get_candidate_tracks
 	my $trackdir="$_[0]";
 
         my $n=0;
-        my $ct=0; my $cl=0; my $cw=0;
+        my $cc=0; my $cl=0; my $cw=0;
         my $flag_dup=0;
 
 	opendir my $d,$trackdir or fail("opendir failed on $trackdir");
@@ -156,8 +150,8 @@ sub get_candidate_tracks
 		if(track_filter($f,$_[9]))
 		{
 
-			my $hash=MetadataProcess::metadata_process("$trackdir/$f",\@{$_[1]},\$ct,\$cl,\$cw,\$flag_dup);
-			next if($hash eq '0');
+			my $md5hash=MetadataProcess::metadata_process("$trackdir/$f",\@{$_[1]},\$cc,\$cl,\$cw,\$flag_dup);
+			next if($md5hash eq '0');
 			# check if we would have enough time in this timeslot
 			# to play this.
 			# If time does not matter, such as for the
@@ -165,16 +159,16 @@ sub get_candidate_tracks
 			if($cl>($_[8]*60))
 			{
        	        		 Debug::trace_out
-				 "disqualified $hash because it's ".($cl-($_[8]*60))." seconds longer than end of timeslot.";
+				 "disqualified $md5hash because it's ".($cl-($_[8]*60))." seconds longer than end of timeslot.";
 				next;	
 			}
 			push @{$_[2]},$f;
-			push @{$_[3]},$hash;
-			push @{$_[4]},$c;
-			push @{$_[5]},$l;
-			push @{$_[6]},$w;
+			push @{$_[3]},$md5hash;
+			push @{$_[4]},$cc;
+			push @{$_[5]},$cl;
+			push @{$_[6]},$cw;
 			push @{$_[7]},$n;
-			Debug::trace_out("candidate track $n: $hash, $f, C:$ct, L:$cl, W:$cw");
+			Debug::trace_out("candidate track $n: $md5hash, $f, C:$cc, L:$cl, W:$cw");
 			$n++;
 		}
 	}
@@ -250,7 +244,7 @@ Debug::trace_out "*** read_file_string($_[0])";
 # Parameters/info
 #
 # $_[0]: File to read, will NOT be created if it does not exist
-# Returns text of key, or undef if key doesn't exist or an I/O error
+# Returns text of file, or undef if key doesn't exist or an I/O error
 # occurred.
 
 	my $in_file="$_[0]";
@@ -536,32 +530,41 @@ sub get_metadata
 #  $Conf::conf{'basedir'}, $Conf::conf{'metadatadir'}
 
 # TODO: Improve I/O error handling
-	my $metadata;
+	my %out_metadata=(c=>0,l=>0,w=>0);
+
 	my $in_file="$Conf::conf{'basedir'}/$Conf::conf{'metadatadir'}/$_[0].txt";
+
 	if(! -e $in_file)
 	{
-		my $new_data="c:0/l:0/w:0";
-		Debug::trace_out "    [get_metadata($_[0])] new metadata object data \"$new_data\"";
-		set_metadata($_[0],$new_data);
-		return $new_data
+		Debug::trace_out "    [get_metadata($_[0])] new metadata";
+		set_metadata($_[0],%out_metadata);
+		return %out_metadata;
 	}
+
 	open(my $m,'<',$in_file) or do{Debug::error_out "    [get_metadata($_[0])] unable to open $in_file for reading"; return "";};
 	my $file_input=<$m>;
-	Debug::trace_out "    [get_metadata($_[0])] existing metadata object data \"$file_input\"";
-# TODO validate file input
+	Debug::trace_out "    [get_metadata($_[0])] existing metadata, serialized is \"$file_input\"";
 	close $m;
-	$metadata=$file_input;
-	return $metadata;
+
+	my %out_metadata;
+	foreach(split(/\//,$file_input))
+	{
+		my $left=(split(/:/,$_))[0];
+		my $right=(split(/:/,$_))[1];
+		$out_metadata{$left}=$right;
+	}
+
+	return %out_metadata;
 }
 
 sub set_metadata
 {
-	Debug::trace_out "*** set_metadata($_[0],\"$_[1]\")";
+	Debug::trace_out "*** set_metadata($_[0],$_[1])";
 
 # Parameters/info
 #
 # $_[0]: md5
-# $_[1]: data to write
+# $_[1]: data to write; should be a reference to a hash
 #
 # Returns 1 if written successfully, 0 if an I/O error occurred
 #
@@ -570,9 +573,18 @@ sub set_metadata
 
 	my $in_file="$Conf::conf{'basedir'}/$Conf::conf{'metadatadir'}/$_[0].txt";
 
-	open(my $m,'>',$in_file) or do{Debug::error_out "    [set_metadata($_[0],\"$_[1]\")] unable to open $in_file for writing"; return 1;};
+	my $in_data='';
+	foreach my $key(keys %{$_[1]})
+	{
+		$in_data=$in_data.$key.":".$_[1]->{$key}.'/'
+	}
+	chop($in_data);
+
+	Debug::trace_out "    [set_metadata($_[0],$_[1])] writing \"$in_data\"";
+
+	open(my $m,'>',$in_file) or do{Debug::error_out "    [set_metadata($_[0],$_[1])] unable to open $in_file for writing"; return 1;};
 	# TODO error handling
-	print $m "$_[1]";
+	print $m "$in_data";
 	close $m;
 
 	return 0;
