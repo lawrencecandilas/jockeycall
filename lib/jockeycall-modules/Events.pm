@@ -75,7 +75,7 @@ sub entering_new_timeslot
 #
 # $_[0]: New timeslot
 
-        Debug::debug_out "entering new timeslot";
+        Debug::debug_out('entering new timeslot');
         BannerUpdate::set_doUpdate_flag();
         DataMoving::set_rkey('need-a-flip','');
 	Playlog::private_playlog_out('== New Timeslot ==');
@@ -90,7 +90,7 @@ sub entering_intermission
 #
 # Called when entering intermission
 
-        Debug::debug_out "entering new timeslot";
+        Debug::debug_out('entering new timeslot');
         BannerUpdate::set_doUpdate_flag();
         DataMoving::set_rkey('need-a-flip','');
 	Playlog::private_playlog_out('== Entering Intermission ==');
@@ -100,7 +100,7 @@ sub entering_intermission
 
 sub leaving_intermission
 {
-	Debug::trace_out "*** leaving_intermission()";
+	Debug::trace_out('*** leaving_intermission()');
 
 # Parameters/info
 #
@@ -113,7 +113,7 @@ sub leaving_intermission
 
 sub timeslot_zone
 {
-	Debug::trace_out "*** timeslot_zone($_[0],$_[1],$_[2],$_[3])";
+	Debug::trace_out("*** timeslot_zone($_[0],$_[1],$_[2],$_[3])");
 
 # Parameters/info
 #
@@ -127,11 +127,11 @@ sub timeslot_zone
 
 	if($_[0]==1)
 	{
-		Playlog::private_playlog_out("== Schedule Yellow Zone ==");
+		Playlog::private_playlog_out('== Schedule Yellow Zone ==');
 	}
 	if($_[0]==2)
 	{
-		Playlog::private_playlog_out("== Schedule Red Zone ==");
+		Playlog::private_playlog_out('== Schedule Red Zone ==');
 	}
 
 }

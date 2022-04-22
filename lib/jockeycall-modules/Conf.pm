@@ -20,7 +20,8 @@ $possible_channel_conf_item{'subdir_wday_sat'}	='chanscheddir-required,mapto:sub
 $possible_channel_conf_item{'day_flip_at'}	='time-optional';
 $possible_channel_conf_item{'track_td'}		='chanfile-required';
 $possible_channel_conf_item{'track_um'}		='chanfile-required';
-$possible_channel_conf_item{'database'}		='chandir-required';
+$possible_channel_conf_item{'state_db'}		='dbnameanddir-required';
+$possible_channel_conf_item{'metadata_db'}	='dbnameanddir-required';
 $possible_channel_conf_item{'schedules_at'}	='chandir-required';
 $possible_channel_conf_item{'intermission_at'}	='chandir-required';
 $possible_channel_conf_item{'logs_at'}		='chandir-required';
@@ -196,27 +197,6 @@ sub check_conf_basedir
 }
 
 
-sub check_conf_metadatadir
-{
-#Debug::trace_out("*** check_conf_metadatadir($_[0])");
-# Parameters/info
-#
-# Verify conf_metadatadir is defined and exists.
-# 
-# Returns 1 if conf_metadatadir is OK, 0 if it is not
-#
-# Package-level variables used:
-#  $conf{'basedir'}, $conf{'metadatadir'}
-
-	return 0
-	 if(($conf{'basedir'} eq '')or($conf{'metadatadir'} eq ''));
-	return 0
-	 if(! -e "$conf{'basedir'}/$conf{'metadatadir'}");
-
-	return 1;
-}
-
-
 sub validate_and_set_conf_line
 {
 #
@@ -278,14 +258,16 @@ sub validate_and_set_conf_line
 
 	$validator_recognized=0;
 
-	if(($validator_type eq 'dir')||($validator_type eq 'chandir')||($validator_type eq 'chanscheddir'))
+	if(substr($validator_type,-3) eq 'dir')
 	{
 		$validator_recognized=1;
 		my $dir_to_check;
 		if($validator_type eq 'dir')		{$dir_to_check=$_[1];}
 		if($validator_type eq 'chandir')	{$dir_to_check=$conf{'basedir'}.'/'.$_[1];}
 		if($validator_type eq 'chanscheddir')	{$dir_to_check=$conf{'basedir'}.'/'.$conf{'schedules_at'}."/".$_[1];}
-		if(! -d dirname($dir_to_check))
+		if($validator_type eq 'dbnameanddir')
+							{$dir_to_check=dirname($conf{'basedir'}.'/',$_[1]);}
+		if(!(-d $dir_to_check))
 		{
 			if($validator_qualifier eq 'nobannersifbad')
 			{

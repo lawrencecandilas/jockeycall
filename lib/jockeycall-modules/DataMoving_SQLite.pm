@@ -47,32 +47,39 @@ sub dbi_error
 
 
 # Main needs to call this after it calls setdirs()
-our $dbh;
+our $dbh_STATE;
+our $dbh_METADATA;
 sub setup
 {
-	# Open the database
-	Debug::trace_out "*** DataMoving::setup() sqlite";
-	Debug::trace_out "    DBI connect: $Conf::conf{'basedir'}/$Conf::conf{'database'}";
+	# TODO: Handle failure better
 
-	$dbh=DBI->connect_cached("DBI:SQLite:dbname=$Conf::conf{'basedir'}/$Conf::conf{'database'}",'','',{RaiseError=>1}) or
+	Debug::trace_out "*** DataMoving::setup() sqlite";
+	my $db_op;
+	my $rv;
+	my %need_to_make;
+
+	# --------------------------------------------------------------------
+	# Get the state database ready
+	Debug::trace_out "    DBI connect for state database: $Conf::conf{'basedir'}/$Conf::conf{'database'}";
+	$dbh_STATE=DBI->connect_cached("DBI:SQLite:dbname=$Conf::conf{'basedir'}/$Conf::conf{'state_db'}",'','',{RaiseError=>1}) or
 	 do
 	{
 		dbi_error;
-		Concurrency::fail('initial DBI connect failed, unable to open or create database');
+		Concurrency::fail('state database (sqlite): initial DBI connect failed, unable to open or create it');
 	};
 
-	# The above will create the database if it doesn't exist.
+	# The above will create the STATE database if it doesn't exist.
 	# And if it is a new database, we have to create the tables.
 	# So we need to query for existing tables and make the ones that are missing.
 	#
-	my $db_op=$dbh->prepare("select name from sqlite_schema where type='table' order by name;");
-	my $rv=$db_op->execute() or dbi_error;
+	$db_op=$dbh_STATE->prepare("select name from sqlite_schema where type='table' order by name;");
+	$rv=$db_op->execute() or dbi_error;
 	if($rv<0){dbi_error;}
 	#
-	# Tables we're checking
-	my %need_to_make=('oob_queue'=>1,'rkeys'=>1,'metadata'=>1);
+	# State tables we're checking
+	%need_to_make=('oob_queue'=>1,'rkeys'=>1);
 	#
-	# Fetch list of base tables and mark 0 the ones that exist
+	# Fetch list of base state tables and mark 0 the ones that exist
 	while(my @row=$db_op->fetchrow_array()){$need_to_make{$row[0]}=0;}
 	#
 	# For the ones that were left marked 1, make the base tables.
@@ -83,29 +90,60 @@ sub setup
 	#
 	if($need_to_make{'oob_queue'}==1)
 	{
-                Debug::trace_out "creating oob_queue table in sqlite database";
+                Debug::trace_out('state database (sqlite): creating oob_queue table');
                 my $stmt="
                 create table 'oob_queue'
                  ( position	integer		primary key
                   ,track	text
                   );";
-                my $rv=$dbh->do($stmt);
+                my $rv=$dbh_STATE->do($stmt);
                 if($rv<0){dbi_error;}
 	}
 	if($need_to_make{'rkeys'}==1)
 	{
-		Debug::trace_out "creating rkeys table in sqlite database";
-	        my $stmt="
+		Debug::trace_out('state database (sqlite): creating rkeys table');
+	        my $stmt='
         	create table rkeys
 	         ( name         text            primary key not null
         	  ,value        text
-	          );";
-        	my $rv=$dbh->do($stmt);
+	          );';
+        	my $rv=$dbh_STATE->do($stmt);
 		if($rv<0){dbi_error;}
 	}
+
+	# --------------------------------------------------------------------
+	# Get the metadata database ready
+	Debug::trace_out "    DBI connect for metadata database: $Conf::conf{'basedir'}/$Conf::conf{'database'}";
+        $dbh_METADATA=DBI->connect_cached("DBI:SQLite:dbname=$Conf::conf{'basedir'}/$Conf::conf{'metadata_db'}",'','',{RaiseError=>1}) or
+         do
+        {
+                dbi_error;
+                Concurrency::fail('metadata database (sqlite): initial DBI connect failed, unable to open or create it');
+        };
+
+        # The above will create the METADATA database if it doesn't exist.
+        # And if it is a new database, we have to create the tables.
+        # So we need to query for existing tables and make the ones that are missing.
+        #
+        $db_op=$dbh_METADATA->prepare("select name from sqlite_schema where type='table' order by name;");
+        $rv=$db_op->execute() or dbi_error;
+        if($rv<0){dbi_error;}
+        #
+        # Metadata tables we're checking, for metadata database
+        %need_to_make=('metadata'=>1);
+        #
+        # Fetch list of base metadata tables and mark 0 the ones that exist
+        while(my @row=$db_op->fetchrow_array()){$need_to_make{$row[0]}=0;}
+        #
+        # For the ones that were left marked 1, make the base tables.
+        #
+        # We say base tables because we might have others that are created on-demand,
+        # to track histories, but these are needed right off the bat for a new
+        # database
+        #
 	if($need_to_make{'metadata'}==1)
 	{
-		Debug::trace_out "creating metadata table in sqlite database";
+		Debug::trace_out "metadata database (sqlite): creating metadata table";
 	        my $stmt="
 	        create table metadata
 	         ( md5hash      	text            primary key not null
@@ -116,7 +154,7 @@ sub setup
 	          ,l_lengthsecs 	int             not null
 	          ,w_weight     	int             not null
         	  );";
-	        my $rv=$dbh->do($stmt);
+	        my $rv=$dbh_METADATA->do($stmt);
 		if($rv<0){dbi_error;}
 	}
 }
@@ -138,7 +176,7 @@ sub setup_timeslot_vars
 
         Debug::trace_out "    timeslot_id is $timeslot_id";
 
-        my $db_op=$dbh->prepare('select name from sqlite_schema where name=?;');
+        my $db_op=$dbh_STATE->prepare('select name from sqlite_schema where name=?;');
         my $rv=$db_op->execute($timeslot_vars_table) or dbi_error;
         if($rv<0){dbi_error;}
         while(my @row=$db_op->fetchrow_array())
@@ -153,13 +191,13 @@ sub setup_timeslot_vars
 
         # create new table for this timeslot_id
         Debug::trace_out "    creating new timeslot variables table $timeslot_vars_table";
-        my $db_op=$dbh->prepare("select name from sqlite_schema where name=?;");
+        my $db_op=$dbh_STATE->prepare("select name from sqlite_schema where name=?;");
         my $stmt="
         create table \"$timeslot_vars_table\"
          ( name         text            primary key not null
           ,value        text
           );";
-        my $rv=$dbh->do($stmt);
+        my $rv=$dbh_STATE->do($stmt);
         if($rv<0){dbi_error; return 0;}
         set_key('directory',$Conf::conf{'SCD'});
         set_key('created',$Debug::timestamp_localtime);
@@ -229,7 +267,7 @@ sub get_candidate_tracks
         my $cc=0; my $cl=0; my $cw=0;
         my $flag_dup=0;
 
-	opendir my $d,$trackdir or fail("opendir failed on $trackdir");
+	opendir my $d,$trackdir or Concurrency::fail("opendir failed on $trackdir");
 
 	while(my $f=readdir($d))
 	{
@@ -280,7 +318,7 @@ Debug::trace_out "*** DataMoving::read_timeslot_dir($_[0],$_[1],$_[2]) sqlite";
 # If directory is found in timeslot directory history, it won't be pushed on
 # @{$_[1])
 #
-	opendir my $d,"$_[0]" or fail("opendir failed on $_[0]");
+	opendir my $d,"$_[0]" or Concurrency::fail("opendir failed on $_[0]");
 
 	while(my $f=readdir($d))
 	{
@@ -380,7 +418,7 @@ sub get_key
 #  - $_[0] was null
 #  - a database error occurred and the variable could not be read
 #
-        my $db_op=$dbh->prepare('select value from "'.$timeslot_vars_table.'" where name=?;');
+        my $db_op=$dbh_STATE->prepare('select value from "'.$timeslot_vars_table.'" where name=?;');
         my $rv=$db_op->execute($_[0]);
         if($rv<0)
         {
@@ -445,7 +483,7 @@ sub get_rkey
 #  - $_[0] was null
 #  - a database error occurred and the variable could not be read
 #
-	my $db_op=$dbh->prepare('select value from rkeys where name=?;');
+	my $db_op=$dbh_STATE->prepare('select value from rkeys where name=?;');
 	my $rv=$db_op->execute($_[0]);
         if($rv<0)
         {
@@ -496,7 +534,7 @@ sub set_key
 #
 # Returns 1 if successful, 0 if an I/O error occurred
 #
-        my $db_op=$dbh->prepare('insert or replace into "'.$timeslot_vars_table.'" (name,value) values (?,?);');
+        my $db_op=$dbh_STATE->prepare('insert or replace into "'.$timeslot_vars_table.'" (name,value) values (?,?);');
         $db_op->execute($_[0],$_[1]);
         if($rv<0)
         {
@@ -524,7 +562,7 @@ sub set_rkey
 #
 # Returns 1 if successful, 0 if an I/O error occurred or $_[0] is null.
 #
-        my $db_op=$dbh->prepare('insert or replace into rkeys (name,value) values (?,?);');
+        my $db_op=$dbh_STATE->prepare('insert or replace into rkeys (name,value) values (?,?);');
         $db_op->execute($_[0],$_[1]);
         if($rv<0)
         {
@@ -552,7 +590,7 @@ sub clear_rkey
 # Returns 1 if successful, 0 if an I/O error occurred or $_[0] is null.
 # This deletes the variable from the database
 #
-	my $db_op=$dbh->prepare('delete from rkeys where name=?;');
+	my $db_op=$dbh_STATE->prepare('delete from rkeys where name=?;');
 	$db_op->execute($_[0]);
         if($rv<0)
         {
@@ -586,7 +624,7 @@ sub make_table_if_needed
 		return 1;
 	}
 
-        my $db_op=$dbh->prepare('select name from sqlite_schema where name=?;');
+        my $db_op=$dbh_STATE->prepare('select name from sqlite_schema where name=?;');
         my $rv=$db_op->execute($_[0]) or dbi_error;
         if($rv<0){dbi_error;}
         while(my @row=$db_op->fetchrow_array())
@@ -602,13 +640,13 @@ sub make_table_if_needed
 
         # create new table for this timeslot_id
         Debug::trace_out "    need to make new table \"$_[0]\"";
-        my $db_op=$dbh->prepare('select name from sqlite_schema where name=?;');
+        my $db_op=$dbh_STATE->prepare('select name from sqlite_schema where name=?;');
         my $stmt="
         create table \"$_[0]\"
          ( id		integer		primary key 
           ,value	text		not null
           );";
-        my $rv=$dbh->do($stmt);
+        my $rv=$dbh_STATE->do($stmt);
         if($rv<0)
 	{
 		dbi_error;
@@ -643,7 +681,7 @@ sub new_list
 
 	# Otherwise...
 	# At this point we're looking at clearing an existing table.
-	my $rv=$dbh->do('delete from "'.$list_table.'"');
+	my $rv=$dbh_STATE->do('delete from "'.$list_table.'"');
 	if($rv<0)
         {
                 dbi_error;
@@ -677,7 +715,7 @@ sub new_rlist
 
         # Otherwise...
         # At this point we're looking at clearing an existing table.
-        my $rv=$dbh->do('delete from "'.$list_table.'"');
+        my $rv=$dbh_STATE->do('delete from "'.$list_table.'"');
         if($rv<0)
         {
                 dbi_error;
@@ -712,7 +750,7 @@ sub append_to_list
 	return 0 if(make_table_if_needed($list_table)==0);
 	Debug::trace_out "    make_table_if_needed returned without error";
 
-        my $db_op=$dbh->prepare('insert into "'.$list_table.'" (value) values (?);');
+        my $db_op=$dbh_STATE->prepare('insert into "'.$list_table.'" (value) values (?);');
 	# We're not setting 'id' column here because ...
 	#
 	# This--https://sqlite.org/autoinc.html--tells me it will autoincrement
@@ -755,7 +793,7 @@ sub append_to_rlist
         return 0 if(make_table_if_needed($list_table)==0);
         Debug::trace_out "    make_table_if_needed returned without error";
 
-        my $db_op=$dbh->prepare('insert into "'.$list_table.'" (value) values (?);');
+        my $db_op=$dbh_STATE->prepare('insert into "'.$list_table.'" (value) values (?);');
         # We're not setting 'id' column here because ...
         #
         # This--https://sqlite.org/autoinc.html--tells me it will autoincrement
@@ -788,7 +826,7 @@ sub read_list
 	return 0 if(make_table_if_needed($list_table)==0);
 	Debug::trace_out "    make_table_if_needed returned without error";
 
-        my $db_op=$dbh->prepare('select value from "'.$list_table.'";');
+        my $db_op=$dbh_STATE->prepare('select value from "'.$list_table.'";');
 	my $rv=$db_op->execute();
         if($rv<0)
         {
@@ -822,7 +860,7 @@ sub read_rlist
         return 0 if(make_table_if_needed($list_table)==0);
         Debug::trace_out "    make_table_if_needed returned without error";
 
-        my $db_op=$dbh->prepare('select value from "'.$list_table.'";');
+        my $db_op=$dbh_STATE->prepare('select value from "'.$list_table.'";');
         my $rv=$db_op->execute();
         if($rv<0)
         {
@@ -851,7 +889,7 @@ sub oob_queue_dump
 # Intended for use by oob dump subcommand.
 #
 	Debug::trace_out "*** DataMoving::oob_queue_dump() sqlite";
-	my $db_op=$dbh->prepare('select "position","track" from "oob_queue" order by "position" desc;');
+	my $db_op=$dbh_STATE->prepare('select "position","track" from "oob_queue" order by "position" desc;');
 	my $rv=$db_op->execute();
         if($rv<0)
         {
@@ -888,7 +926,7 @@ sub oob_queue_push
 		return 1;
 	}
 
-        my $db_op=$dbh->prepare('insert into "oob_queue" (track) values (?);');
+        my $db_op=$dbh_STATE->prepare('insert into "oob_queue" (track) values (?);');
         # We're not setting 'id' column here because ...
         #
         # This--https://sqlite.org/autoinc.html--tells me it will autoincrement
@@ -915,7 +953,7 @@ sub oob_queue_pop
 # Takes no arguments.  Will pop most recent OOB track pushed on to stack, or
 # returns undef if stack is empty or an error occured.
 #
-	my $db_op=$dbh->prepare('select "position","track" from "oob_queue" order by "position" desc;');
+	my $db_op=$dbh_STATE->prepare('select "position","track" from "oob_queue" order by "position" desc;');
 	my $rv=$db_op->execute();
 	if($rv<0)
 	{
@@ -928,7 +966,7 @@ sub oob_queue_pop
 	{
 		$out=$row[1];
 		Debug::trace_out "    top row is \"$row[0]\", \"$row[1]\"";
-		my $db_op=$dbh->prepare('delete from "oob_queue" where position=?');
+		my $db_op=$dbh_STATE->prepare('delete from "oob_queue" where position=?');
 		$rv=$db_op->execute($row[0]);
 		if($rv<0)
 		{
@@ -949,13 +987,13 @@ sub get_metadata
 #
 # $_[0]: md5
 #
-# Returns undef if an I/O error occurred.
+# Returns undef if an DBI error occurred.
 #
 	my %out_metadata=(c=>0,l=>0,w=>0);
 	# If l is 0, MetadataProcess::metadata_process will call mp3info to
 	# set the length.
 
-        my $db_op=$dbh->prepare('select c_playcount,l_lengthsecs,w_weight from metadata where md5hash=?');
+        my $db_op=$dbh_METADATA->prepare('select c_playcount,l_lengthsecs,w_weight from metadata where md5hash=?');
         my $rv=$db_op->execute($_[0]);
         if($rv<0)
         {
@@ -988,9 +1026,9 @@ sub set_metadata
 # $_[0]: md5
 # $_[1]: data to write; should be a reference to a hash
 #
-# Returns 1 if written successfully, 0 if an I/O error occurred
+# Returns 1 if written successfully, 0 if an DBI error occurred
 #
-        my $db_op=$dbh->prepare('insert or replace into metadata (md5hash,c_playcount,l_lengthsecs,w_weight) values (?,?,?,?)');
+        my $db_op=$dbh_METADATA->prepare('insert or replace into metadata (md5hash,c_playcount,l_lengthsecs,w_weight) values (?,?,?,?)');
         $db_op->execute($_[0],$_[1]->{'c'},$_[1]->{'l'},$_[1]->{'w'});
         if($rv<0)
         {

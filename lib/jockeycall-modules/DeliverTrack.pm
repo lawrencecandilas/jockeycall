@@ -39,12 +39,12 @@ Debug::trace_out "*** check_track($_[0])";
 
 	if(! -e $_[0])
 	{
-		Debug::error_out "Track \"$_[0]\" not found.";
+		Debug::error_out "[DeliverTrack::check_track] Track \"$_[0]\" not found.";
 		return 0;
 	}
 	if(! -f $_[0])
 	{
-		Debug::error_out "Track \"$_[0]\" is not a file.";
+		Debug::error_out "[DeliverTrack::check_track] Track \"$_[0]\" is not a file.";
 		return 0;
 	}
 
@@ -69,11 +69,11 @@ Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
 
         if($_[1] eq '')
         {
-                DataMoving::set_rkey("now-playing",basename($_[0]));
+                DataMoving::set_rkey('now-playing',basename($_[0]));
         }
         else
         {
-                DataMoving::set_rkey("now-playing",$_[1]);
+                DataMoving::set_rkey('now-playing',$_[1]);
         }
 
         Playlog::private_playlog_out($_[0]);
@@ -128,11 +128,11 @@ Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
 
 	if($_[1] eq '')
 	{
-		DataMoving::set_rkey("now-playing",basename($_[0]));
+		DataMoving::set_rkey('now-playing',basename($_[0]));
 	}
 	else
 	{
-		DataMoving::set_rkey("now-playing",$_[1]);
+		DataMoving::set_rkey('now-playing',$_[1]);
 	}
 
 	Playlog::private_playlog_out($_[0]);
@@ -164,7 +164,7 @@ sub technical_difficulties
 Debug::trace_out "*** technical_difficulties()";
 	if($Conf::conf{'track_td'} eq '')
 	{
-		Concurrency::fail("technical_difficulties(): CONF_track_td not defined",1);
+		Concurrency::fail('[DeliverTrack::technical_difficulties] CONF_track_td not defined',1);
 	}
 
 # Parameters/info
@@ -176,7 +176,7 @@ Debug::trace_out "*** technical_difficulties()";
 
 	if(!check_track("$Conf::conf{'basedir'}/$Conf::conf{'track_td'}"))
 	{
-		Concurrency::fail("technical_difficulties(): check_track() on CONF_track_td \"$Conf::conf{'track_td'}\" failed",1);
+		Concurrency::fail("[DeliverTrack::technical_difficulties] check_track() on CONF_track_td \"$Conf::conf{'track_td'}\" failed",1);
 	}	
 
 	now_play("$Conf::conf{'basedir'}/$Conf::conf{'track_td'}","TECHNICAL DIFFICULTIES - PLEASE STAND BY",1);

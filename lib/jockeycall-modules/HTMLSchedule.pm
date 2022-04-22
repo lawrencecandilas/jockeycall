@@ -13,7 +13,7 @@ our @EXPORT=qw(
 
 sub html_schedule
 {
-	Debug::trace_out "*** html_schedule(\"".$_[0]."\")";
+	Debug::trace_out("*** html_schedule(\"".$_[0]."\")");
 #
 # Returns big string containing HTML version of the schedule
 #

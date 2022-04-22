@@ -133,6 +133,7 @@ Playlog::set_public_playlog_file($Conf::conf{'basedir'}.'/'.$Conf::conf{'logs_at
 
 # Prepare lock code (or fail)
 $Concurrency::concurrency_lock_code=qx\cat "/proc/sys/kernel/random/uuid"\;
+chomp($Concurrency::concurrency_lock_code);
 if(($?!='0')or($Concurrency::concurrency_lock_code eq '')){Concurrency::fail "lock code generation failed, error code $?";}
 Debug::debug_out "lock code is $Concurrency::concurrency_lock_code";
 

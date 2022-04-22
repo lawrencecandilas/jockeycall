@@ -63,8 +63,8 @@ sub oob_process_if_applicable
 
 		if(!DeliverTrack::check_track("$oob_track"))
 		{
-		Debug::error_out "check_track() failed on OOB track \"$oob_track\"";
-		Debug::error_out "skipping this OOB track";
+		Debug::error_out("[OOB::oob_process_if_applicable] check_track() failed on OOB track \"$oob_track\"");
+		Debug::error_out('[OOB::oob_process_if_applicable] skipping this OOB track');
 		next;
 		}
 
@@ -76,14 +76,14 @@ sub oob_process_if_applicable
 	if(index($oob_track,"ZZ-STATION-ID-ZZ")!=-1){$extra="This is $channel - Station Identification";}
 	if(index($oob_track,"ZZ-SILENCE----ZZ")!=-1){$extra="This is $channel";}
 	if(index($oob_track,"ZZ------------ZZ")!=-1){$extra="This is $channel";}
-	if(index($oob_track,"ZZ-EMERGENCY--ZZ")!=-1){$extra="EMERGENCY ANNOUNCEMENT";}
+	if(index($oob_track,"ZZ-EMERGENCY--ZZ")!=-1){$extra='EMERGENCY ANNOUNCEMENT';}
 
 	DeliverTrack::now_play($oob_track,$extra,1);
 }
 
 sub oob_push
 {
-	Debug::trace_out "*** oob_push(\"$_[0]\")";
+	Debug::trace_out("*** oob_push(\"$_[0]\")");
 	if($_[0] eq '')
 	{
 		Debug::trace_out "    first parameter was null, doing nothing";
@@ -102,7 +102,7 @@ sub oob_push
 
 sub interval_process
 {
-	Debug::trace_out "*** interval_process(\"$_[0]\")";
+	Debug::trace_out("*** interval_process(\"$_[0]\")");
 
 # Parameters/info
 #
@@ -236,7 +236,7 @@ sub interval_process
 
 sub periodic_process
 {
-	Debug::trace_out "*** periodic_process(\"$_[0]\",$_[1],$_[2])";
+	Debug::trace_out("*** periodic_process(\"$_[0]\",$_[1],$_[2])");
 	my $in_last_datestring=$_[1];
 	my $in_datestring=$_[2];
 
@@ -257,7 +257,7 @@ sub periodic_process
 #
 # Returns 0 if no tracks added to OOB queue, 1 if they were.
 
-	Debug::debug_out "Looking at intervals for periodics";
+	Debug::debug_out('[OOB::periodic_process] Looking at intervals for periodics');
 	my @periodics=();
 	 
 	if(! -e "$_[0]"){return 1;}
@@ -267,7 +267,7 @@ sub periodic_process
 	my @rrsubdirs=();
 	if(!opendir my $d,"$_[0]")
 	{
-		Debug::error_out "could not open \"$_[0]\"";
+		Debug::error_out("[OOB::periodic_process] could not open \"$_[0]\"");
 	}
 	else
 	{
@@ -291,7 +291,7 @@ sub periodic_process
 # let's get a list of round-robin subdirs in $_[0]/rr.
 		if(!opendir my $d,"$_[0]/rr")
 		{
-			Debug::error_out "could not open \"$_[0]\"";
+			Debug::error_out("[OOB::periodic_process] could not open \"$_[0]\"");
 		}
 		else
 		{
@@ -316,7 +316,7 @@ sub periodic_process
   
 		if(($t2-$t1)==1)
 		{
-			Debug::debug_out "new $interval minute mark - scanning for periodics";
+			Debug::debug_out("[OOB::periodic_process] new $interval minute mark - scanning for periodics");
 
 # force a banner flip every 20 mins
 #
@@ -329,7 +329,7 @@ sub periodic_process
 #
 			if($interval==20)
 			{
-				Debug::debug_out "Setting need-a-flip flag";
+				Debug::debug_out('setting need-a-flip flag');
 				DataMoving::set_rkey('need-a-flip',1);
 			}
 
@@ -366,7 +366,7 @@ sub periodic_process
 
 	if(scalar(@periodics)!=0)
 	{
-		Debug::debug_out "Processing ".scalar(@periodics)." periodic interval subdirectories.";
+		Debug::debug_out('[OOB::periodic_process] processing '.scalar(@periodics).' periodic interval subdirectories');
 		foreach my $periodic(@periodics)
 		{
 			$FLAG_added_a_periodic+=interval_process($periodic);
@@ -374,7 +374,7 @@ sub periodic_process
 	}
 	else
 	{
-		Debug::debug_out "No periodic interval subdirectories to process.";
+		Debug::debug_out('no periodic interval subdirectories to process');
 	}
 
 	return $FLAG_added_a_periodic;

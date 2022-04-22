@@ -70,9 +70,11 @@ our $concurrency_lock_flag_acquired;
 
 sub acquire_lock
 {
-Debug::trace_out "*** acquire_lock()";
-fail("Conf::check_conf_basedir() failed")if(Conf::check_conf_basedir!=1);
-return 0 if($concurrency_lock_flag_acquired==1);
+	Debug::trace_out "*** acquire_lock()";
+	fail('Conf::check_conf_basedir() failed')if(Conf::check_conf_basedir!=1);
+
+	# Report error if we try to acquire a lock while already acquired.
+	return 0 if($concurrency_lock_flag_acquired==1);
 
 # Parameters/info
 #
@@ -93,10 +95,10 @@ return 0 if($concurrency_lock_flag_acquired==1);
 
 	if($concurrency_lock_code eq '')
 	{
-		Debug::error_out("concurrency_lock_code not defined.");
+		Debug::error_out('[Concurrency::acquire_lock] concurrency_lock_code not defined');
 		return 0;
 	}
-	Debug::debug_out "lock code is $concurrency_lock_code";
+	Debug::debug_out "[Concurrency::acquire_lock] I am told the lock code is \"$concurrency_lock_code\"";
 
 	my $lockfile="$Conf::conf{'basedir'}/lockfile";
 
@@ -110,7 +112,7 @@ return 0 if($concurrency_lock_flag_acquired==1);
 # give up if out of tries.
 	if($tries==0)
 	{
-		Debug::debug_out("existing lock never disappeared");
+		Debug::debug_out("[Concurrency::acquire_lock] existing lock never disappeared");
 	return 0;
 	}
 
@@ -118,65 +120,61 @@ return 0 if($concurrency_lock_flag_acquired==1);
 	if(! -e $lockfile)
 	{
 # create it ...
-		open my $f,'>',$lockfile;
-		if(!$!)
-		{
-			Debug::debug_out("could not create lockfile \"$lockfile\"");
+		open my $f,'>',$lockfile 
+		or do{
+			Debug::debug_out("[Concurrency::acquire_lock] could not create lockfile \"$lockfile\": $!");
 			return 0;
-		}
+		};
 # put our lock code in it ...
 		print $f $concurrency_lock_code;
 		if(!$!)
 		{
-			Debug::debug_out("could not write to lockfile \"$lockfile\"");
-			close $f;
-			if(!$!){Debug::debug_out ("couldn't close it either")};
+			Debug::debug_out("[Concurrency::acquire_lock] could not write to lockfile \"$lockfile\": $!");
+			close $f
+			or do{Debug::debug_out ('[Concurrency::acquire_lock] could not close it either')};
 			return 0;
 		}
-		close $f;
 # close it ...
-		if(!$!)
-		{
-			 Debug::debug_out("could not close lockfile \"$lockfile\" after writing");
+		close $f
+		or do{
+			 Debug::debug_out("[Concurrency::acquire_lock] could not close lockfile \"$lockfile\" after writing: $!");
 			return 0;
-		}
+		};
 # reopen it ...
-		open my $f2,'<',$lockfile;
-		if(!$!)
-		{
-			Debug::debug_out("could not open \"$lockfile\" for readback");
+		open my $f2,'<',$lockfile
+		or do{
+			Debug::debug_out("[Concurrency::acquire_lock] could not open \"$lockfile\" for readback: $!");
 			return 0;
-		}
+		};
 # read it back and verify it's the same one.
-		my $lockfile_readback=<$f2>;
-		if(!$!)
-		{
-			Debug::debug_out("failure while reading back from \"$lockfile\"");
-			close $f2;
-			if(!$!){Debug::debug_out ("couldn't close it either")};
+		my $lockfile_readback=<$f2>
+		or do{
+			Debug::debug_out("[Concurrency::acquire_lock] errno $! while reading back from \"$lockfile\": $!");
+			close $f2
+			or do{Debug::debug_out('[Concurrency::acquire_lock] could not close it either')};
 			return 0;
-		}
+		};
 #chomp $lockfile_readback;
-		Debug::debug_out "lockfile_readback is $lockfile_readback";
+		Debug::debug_out "[Concurrency::acquire_lock] lockfile_readback is \"$lockfile_readback\"";
 		if($lockfile_readback ne $concurrency_lock_code)
 		{
-			Debug::error_out "lockfile readback did not match lock code $concurrency_lock_code";
+			Debug::error_out "[Concurrency::acquire_lock] lockfile readback did not match lock code \"$concurrency_lock_code\"";
 			return 0;
 		}
-		close $f2;
-		if(!$!)
-		{
-			Debug::debug_out("could not close lockfile \"$lockfile\" after readback");
+		close $f2
+		or do{
+			Debug::debug_out("[Concurrency::acquire_lock] could not close lockfile \"$lockfile\" after readback: $!");
 			return 0;
-		}
+		};
+		Debug::debug_out('[Concurrency::acquire_lock] match, lock is acquired');
 		$concurrency_lock_flag_acquired=1;
 		return 1;
 	}
 
 # lock file exists if we get here.
 # wait a tiny bit and try again.
-	Debug::debug_out "lockfile exists, trying again in .05 second";
-	sleep .05;
+	Debug::debug_out('[Concurrency::acquire_lock] lockfile exists, trying again in 0.25 second(s)');
+	sleep .25;
 
 	}
 
@@ -207,14 +205,15 @@ sub release_lock{
 
 	if(! -e $lockfile)
 	{
-		Debug::debug_out "lockfile $lockfile didn't exist anyway"; return 1;
+		Debug::trace_out("    lockfile \"$lockfile\" didn't exist anyway");
+		return 1;
 	}
 
-	unlink($lockfile);
-	if(!$!)
-	{
-		Debug::error_out "could not delete lockfile"; return 0;
-	}
+	unlink($lockfile)
+	or do{
+		Debug::error_out("[Concurrency::release_lock] could not delete lockfile: $!");
+		return 0;
+	};
 
 	return 1;
 }

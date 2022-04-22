@@ -36,7 +36,7 @@ sub set_channel { $channel=$_[0]; }
 
 sub kickoff
 {
-        Debug::trace_out "*** kickoff(\"".$_[0]."\")";
+        Debug::trace_out("*** Operation::kickoff(\"".$_[0]."\")");
 
 # Parameters/info
 #
@@ -55,11 +55,11 @@ sub kickoff
 
 sub one_step
 {
-        Debug::trace_out "*** one_step(\"".$_[0]."\",$_[1],\"".$_[2]."\",\"".$_[3]."\")";
+        Debug::trace_out("*** Operation::one_step(\"".$_[0]."\",$_[1],\"".$_[2]."\",\"".$_[3]."\")");
 
 	if($cancelled!=0)
 	{
-        	Debug::trace_out "cancelled flag set, exiting immediately";
+        	Debug::trace_out "    cancelled flag set, exiting immediately";
 		return 1;
 	}
 
@@ -74,7 +74,7 @@ sub one_step
         # file doesn't exist? report error and return.
         if(! -e $_[0])
         {
-                Debug::error_out "one_step(): operation file \"".$_[0]."\" doesn't exist.";
+                Debug::error_out("[Operation::one_step] operation file \"".$_[0]."\" doesn't exist.");
 		cancel_any_active;
                 return 1;
         }
@@ -96,7 +96,7 @@ sub one_step
 			$opr=shift @oprparams;
 			if(!(any{/$opr/}@valid_operation_names))
 			{
-                		Debug::error_out "one_step(): the command \"".$opr."\" in operation file \"".$_[0]."\" is not recognized.";
+                		Debug::error_out("[Operation::one_step] the command \"".$opr."\" in operation file \"".$_[0]."\" is not recognized.");
 				cancel_any_active;
 				return 1;
 			}
@@ -112,7 +112,7 @@ sub one_step
 	# validate we got everything we need from that operation file.
 	if(!$opr)
 	{
-                Debug::error_out "one_step(): couldn't find a command in operation file \"".$_[0]."\".";
+                Debug::error_out('[Operation::one_step] could not find a command in operation file \"'.$_[0].'\"');
 		cancel_any_active;
 		return 1;
 	}
@@ -137,56 +137,56 @@ sub operation_execute
 
 sub cancel_any_active
 {
-        Debug::trace_out "*** cancel_any_active";
+        Debug::trace_out('*** Operation::cancel_any_active');
 
-	my $operation=DataMoving::get_rkey("current_operation");
+	my $operation=DataMoving::get_rkey('current_operation');
 
-	DataMoving::set_rkey("current_operation_file",'');
-	DataMoving::set_rkey("current_operation",'');
-	DataMoving::set_rkey("current_operation_step",'');
-	DataMoving::set_rkey("current_operation_data1",'');
-	DataMoving::set_rkey("current_operation_data2",'');
+	DataMoving::set_rkey('current_operation_file','');
+	DataMoving::set_rkey('current_operation','');
+	DataMoving::set_rkey('current_operation_step','');
+	DataMoving::set_rkey('current_operation_data1','');
+	DataMoving::set_rkey('current_operation_data2','');
 
 	$cancelled=1;
 
 	if($operation ne "")
 	{
-		Debug::debug_out "active operation \".$operation.\" cancelled";
+		Debug::debug_out("[Operation::cancel_any_active] active operation \".$operation.\" cancelled");
 	}else{
-		Debug::debug_out "there wasn't an active operation to cancel";
+		Debug::debug_out('[Operation::cancel_any_active] there was not an active operation to cancel');
 	}
 }
 
 
 sub process_any_active
 {
-        Debug::trace_out "*** process_any_active";
+        Debug::trace_out('*** Operation::process_any_active');
 
 	if($cancelled!=0)
 	{
-        	Debug::trace_out "cancelled flag set, exiting immediately";
+        	Debug::trace_out('    cancelled flag set, exiting immediately');
 		return 1;
 	}
 
         if($channel eq '')
         {
-                Debug::error_out '$channel is null.';
+                Debug::error_out('[Operation::process_any_active] $channel is null.');
                 $channel='a jockeycall channel';
         }
 
-        my $operation=DataMoving::get_rkey("current_operation");
-	return if($operation eq "");
+        my $operation=DataMoving::get_rkey('current_operation');
+	return if($operation eq '');
 
-	$operation_file=DataMoving::get_rkey("current_operation_file");
-	$operation_step=DataMoving::get_rkey("current_operation_step");
-	$operation_data1=DataMoving::get_rkey("current_operation_data1");
-	$operation_data2=DataMoving::get_rkey("current_operation_data2");
+	$operation_file=DataMoving::get_rkey('current_operation_file');
+	$operation_step=DataMoving::get_rkey('current_operation_step');
+	$operation_data1=DataMoving::get_rkey('current_operation_data1');
+	$operation_data2=DataMoving::get_rkey('current_operation_data2');
 
 	one_step($operation_file,$operation_step,$operation_data1,$operation_data2);
 	# one_step shouldn't return, it should deliver a track.
-	# if it does return, something bad happened.
+	# if it does return, something bad happened, we'll cancel it.
 
-	Debug::error_out "process_any_active(): one_step() couldn't deliver a track.";
+	Debug::error_out('[Operation::process_any_active] one_step() could not deliver a track, cancelling');
 	cancel_any_active;
 }
 

@@ -12,8 +12,7 @@ our @EXPORT=qw(
 
 sub metadata_process
 {
-	Debug::trace_out "*** metadata_process($_[0])";
-	Conf::check_conf_metadatadir;
+	Debug::trace_out("*** metadata_process($_[0])");
 	return 0 if($_[0] eq '');
 	return 0 if(-d "$_[0]");
 	return 0 if($_[0] eq '.');

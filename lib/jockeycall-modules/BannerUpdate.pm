@@ -112,7 +112,7 @@ sub flip
 # If enabled ...
         if($enabled!=1)
         {
-                Debug::trace_out("Banners not enabled in config.  Doing nothing here.");
+                Debug::trace_out('Banners not enabled in config.  Doing nothing here.');
                 return;
         }
 
@@ -152,27 +152,27 @@ sub serviceInterface
 
 	if($GCURLCMD eq '')
 	{
-		Debug::error_out("BannerUpdate::serviceInterface(): GCURLCMD global is null");
+		Debug::error_out('[BannerUpdate::serviceInterface] GCURLCMD is null');
 		return 0;
 	}
 	if($GServiceURL eq '')
 	{
-		Debug::error_out("BannerUpdate::serviceInterface(): GServiceURL global is null");
+		Debug::error_out('[BannerUpdate::serviceInterface] GServiceURL is null');
 		return 0;
 	}
 	if($GKey eq '')
 	{
-		Debug::error_out("BannerUpdate::serviceInterface(): GKey global is null");
+		Debug::error_out('[BannerUpdate::serviceInterface] GKey global is null');
 		return 0;
 	}
 	if($in_channel eq '')
 	{
-		Debug::error_out("BannerUpdate::serviceInterface(): in_channel is null");
+		Debug::error_out('[BannerUpdate::serviceInterface] in_channel is null');
 		return 0;
 	}
 	if($in_op eq '')
 	{
-		Debug::error_out("BannerUpdate::serviceInterface(): in_op is null");
+		Debug::error_out('[BannerUpdate::serviceInterface] in_op is null');
 		return 0;
 	}
 
@@ -241,11 +241,11 @@ sub serviceInterface
 
 sub updateChannelInfo
 {
-	Debug::trace_out("*** BannerUpdate::updateChannelInfo()");
+	Debug::trace_out('*** BannerUpdate::updateChannelInfo()');
 # If enabled ...
 	if($enabled!=1)
 	{
-		Debug::trace_out("Banners not enabled in config.  Doing nothing here.");
+		Debug::trace_out('Banners not enabled in config.  Doing nothing here.');
 		return;
 	}
 # A frontend for actuallyUpdateChannelInfo(), this is done so we can time the
@@ -268,10 +268,10 @@ sub updateChannelInfo
 
 sub actuallyUpdateChannelInfo
 {
-	Debug::trace_out("*** BannerUpdate::actuallyUpdateChannelInfo()");
+	Debug::trace_out('*** BannerUpdate::actuallyUpdateChannelInfo()');
 # If enabled ...
 	if($enabled!=1){
-		Debug::trace_out("Banners not enabled in config.  Doing nothing here.");
+		Debug::trace_out('Banners not enabled in config.  Doing nothing here.');
 		return 'Banners not enabled';
 	}
 # Conduct the transaction that updates banners and channel information in the
@@ -281,12 +281,12 @@ sub actuallyUpdateChannelInfo
 #
 	if($GChannel eq '')
 	{
-		Debug::error_out("BannerUpdate::actuallyUpdateChannelInfo(): GChannel is null.");
+		Debug::error_out('BannerUpdate::actuallyUpdateChannelInfo(): GChannel is null.');
 		return;
 	}
 
-	Debug::trace_out("begin service calls ...");
-	Debug::trace_out("New		");
+	Debug::trace_out('begin service calls ...');
+	Debug::trace_out('New		');
 
 	my $result=serviceInterface($GChannel,'01',$GChannel);
 	return 'Failed at 01 New' if($result!=1);
@@ -297,14 +297,14 @@ sub actuallyUpdateChannelInfo
 	$GInfoline[0]=DataMoving::read_file_string($GChannel.'/info/descriptionShort.txt');
 	if(!defined($GInfoline[0]))
 	{
-		$GInfoline[0]='<p>'.main::basename($GChannel).' on GROWL</p>';
+		$GInfoline[0]='<p>'.main::basename($GChannel).'</p>';
 	}
 
 # descriptionLong
 	$GInfoline[1]=DataMoving::read_file_string($GChannel.'/info/descriptionLong.txt');
 	if(!defined($GInfoline[1]))
 	{
-		$GInfoline[1]='<p>You are listening to '.main::basename($GChannel).' on GROWL</p>';
+		$GInfoline[1]='<p>You are listening to '.main::basename($GChannel).'</p>';
 	}
 
 # currentShow
@@ -346,7 +346,7 @@ sub actuallyUpdateChannelInfo
 		}
 	}	
 
-	Debug::trace_out("Infolines	");
+	Debug::trace_out('Infolines	');
 
 	$result=serviceInterface($GChannel,'02',$GInfoline[0],$GInfoline[1],$GInfoline[2],$GInfoline[3]);
 	return 'Failed at 02 Infolines' if($result!=1);
@@ -356,7 +356,7 @@ sub actuallyUpdateChannelInfo
 	{
 		$n++;
 
-		Debug::trace_out("Send	".$n."/".scalar(@GBanners)."	");
+		Debug::trace_out('Send	'.$n.'/'.scalar(@GBanners).'	');
 
 		my $result=serviceInterface($GChannel,'03',$b);
 		return 'Failed at 03 Send ('.$n.'/'.scalar(@GBanners).' sent successfully)' if($result!=1);
@@ -367,7 +367,7 @@ sub actuallyUpdateChannelInfo
 	$result=serviceInterface($GChannel,'05',HTMLSchedule::html_schedule($GChannel));
 	return 'Failed at 05 Schedule' if($result!=1);
 
-	Debug::trace_out("Commit		");
+	Debug::trace_out('Commit		');
 
 	$result=serviceInterface($GChannel,'04','');
 	return 'Failed at 04 Commit' if($result!=1);

@@ -61,9 +61,12 @@ intermission_at intermission
 # This item tells jockeycall.pl where the sqlite database holding the channel
 # state is.
 #
-# SQLite database(s)--and this option--are only used if the
-# DataMoving_SQLite.pm module is imported instead of DataMoving.pm,
-database database/state.db
+state_db database/state.db
+
+# This item tells jockeycall.pl where the sqlite database holding the metadata
+# cache is.
+#
+metadata_db database/metadata.db
 
 # logs_at: directory to hold logs, relative to channel directory.
 #
