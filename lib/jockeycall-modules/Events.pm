@@ -3,6 +3,7 @@ use parent 'Exporter';
 require 'Debug.pm';
 require 'Conf.pm';
 require 'Concurrency.pm';
+require 'Playlog.pm';
 require 'DataMoving.pm';
 require 'DeliverTrack.pm';
 
@@ -41,7 +42,7 @@ sub entering_new_day
 # Note: Schedule directory is not established at the time this event might be
 # called!
 
-	DataMoving::private_playlog_out('== New Day ==');
+	Playlog::private_playlog_out('== New Day ==');
 }
 
 
@@ -60,7 +61,7 @@ sub entering_new_dow
 # called!
 
 	my @weekday=('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday');
-        DataMoving::private_playlog_out("== It\'s ".$weekday[$_[1]]." ==");
+        Playlog::private_playlog_out("== It\'s ".$weekday[$_[1]]." ==");
 }
 
 
@@ -76,8 +77,8 @@ sub entering_new_timeslot
 
         Debug::debug_out "entering new timeslot";
         BannerUpdate::set_doUpdate_flag();
-        DataMoving::clear_object('need-a-flip');
-	DataMoving::private_playlog_out('== New Timeslot ==');
+        DataMoving::set_rkey('need-a-flip','');
+	Playlog::private_playlog_out('== New Timeslot ==');
 }
 
 
@@ -91,9 +92,9 @@ sub entering_intermission
 
         Debug::debug_out "entering new timeslot";
         BannerUpdate::set_doUpdate_flag();
-        DataMoving::clear_object('need-a-flip');
-	DataMoving::private_playlog_out('== Entering Intermission ==');
-	DataMoving::public_playlog_out('(Now in intermission)');
+        DataMoving::set_rkey('need-a-flip','');
+	Playlog::private_playlog_out('== Entering Intermission ==');
+	Playlog::public_playlog_out('(Now in intermission)');
 }
 
 
@@ -105,8 +106,8 @@ sub leaving_intermission
 #
 # Called when leaving intermission
 
-	DataMoving::private_playlog_out('== Leaving Intermission ==');
-	DataMoving::public_playlog_out('(Back to program)');
+	Playlog::private_playlog_out('== Leaving Intermission ==');
+	Playlog::public_playlog_out('(Back to program)');
 }
 
 
@@ -126,11 +127,11 @@ sub timeslot_zone
 
 	if($_[0]==1)
 	{
-		DataMoving::private_playlog_out("== Schedule Yellow Zone ==");
+		Playlog::private_playlog_out("== Schedule Yellow Zone ==");
 	}
 	if($_[0]==2)
 	{
-		DataMoving::private_playlog_out("== Schedule Red Zone ==");
+		Playlog::private_playlog_out("== Schedule Red Zone ==");
 	}
 
 }

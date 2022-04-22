@@ -141,11 +141,11 @@ sub cancel_any_active
 
 	my $operation=DataMoving::get_rkey("current_operation");
 
-	DataMoving::clear_object("current_operation_file");
-	DataMoving::clear_object("current_operation");
-	DataMoving::clear_object("current_operation_step");
-	DataMoving::clear_object("current_operation_data1");
-	DataMoving::clear_object("current_operation_data2");
+	DataMoving::set_rkey("current_operation_file",'');
+	DataMoving::set_rkey("current_operation",'');
+	DataMoving::set_rkey("current_operation_step",'');
+	DataMoving::set_rkey("current_operation_data1",'');
+	DataMoving::set_rkey("current_operation_data2",'');
 
 	$cancelled=1;
 
@@ -189,6 +189,5 @@ sub process_any_active
 	Debug::error_out "process_any_active(): one_step() couldn't deliver a track.";
 	cancel_any_active;
 }
-
 
 1;

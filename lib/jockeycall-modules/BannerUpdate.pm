@@ -352,7 +352,6 @@ sub actuallyUpdateChannelInfo
 	return 'Failed at 02 Infolines' if($result!=1);
 
 	my $n=0;
-
 	foreach my $b(@GBanners)
 	{
 		$n++;

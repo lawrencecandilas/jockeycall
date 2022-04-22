@@ -30,8 +30,8 @@ our $debug_option_append=1;
 # Types of messages to include in debug log
 # (error log is separate)
 # (bflip log is also separate)
-our $debug_option_logdebug=0;
-our $debug_option_logtrace=0;
+our $debug_option_logdebug=1;
+our $debug_option_logtrace=1;
 our $debug_option_logerror=1;
 our $debug_option_logbflip=1;
 
@@ -50,6 +50,16 @@ our $debug_fh; 			# File handle of debug log
 our $debug_fhe; 		# File handle of error log
 our $debug_fhb;			# File handle of bflip log
 our $debug_enabled; 		# Internal flag
+
+
+sub stdout_all_the_things
+{
+	$debug_option_logdebug=1;
+	$debug_option_logtrace=1;
+	$debug_option_logerror=1;
+	$debug_option_logbflip=1;
+	$debug_option_stdout=1;
+}
 
 
 sub debug_out

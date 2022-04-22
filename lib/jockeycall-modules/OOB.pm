@@ -14,12 +14,12 @@ require 'Utility.pm';
 # OOB queue is a place to put tracks that need to be played outside of
 # the current timeslot.  Periodics use this.
 
-# Channel, main shold set this
+# Channel, main should set this
+# It's only use is to provide text for tracks with ZZ in the title - those
+# would be station ID tracks or other similar announcements and we probably
+# don't want to report the real title of the track as what's playing.  So we
+# report the channel name instead.
 our $channel;
-
-# Location of OOB queue
-# main should tell us what this is, see below.
-our $obq;
 
 # This is needed because I can't figure out how to get %Conf::conf accessible
 # to functions within OOB.pm.  Doesn't seem to work even if fully qualified.
@@ -29,165 +29,76 @@ sub set_channel
 	$channel=$_[0];
 }
 
-# This is needed because I can't figure out how to get %Conf::conf accessible
-# to functions within OOB.pm.  Doesn't seem to work even if fully qualified.
-# main calls this right after 'use OOB'.
-sub set_obq
-{
-	$obq=$_[0];
-}
-
 our $next;
+
 
 sub oob_pending_delete
 {
-	Debug::trace_out "*** oob_pending_delete()";
-
-# Process any pending delete request from a previous call.
-# Will deliver technical difficulties track if it fails
-	my $delete_this=DataMoving::get_rkey("delete-on-next-call");
-	if($delete_this ne "")
-	{
-		# TODO: Security checks.
-		Debug::debug_out "delete-on-next-call \"$delete_this\"";
-		qx/rm -f "$delete_this"/;
-		if($?!=0)
-		{
-			Debug::debug_out "delete-on-next-call \"$delete_this\" failed";
-			DeliverTrack::technical_difficulties;
-		}
-		else
-		{
-			DataMoving::clear_rkey("delete-on-next-call");
-		}
-	}
+	return 1;
 }
+
 
 sub oob_process_if_applicable
 {
 	Debug::trace_out "*** oob_process_if_applicable";
-	if($obq eq '')
-	{
-		Debug::error_out "Shouldn't happen but did: obq is null";
-		return 0;
-	}
 	if($channel eq '')
 	{
 		Debug::error_out '$channel is null.';
 		$channel='a jockeycall channel';
 	}
 
-# Reads OOB queue and if a track is pending, will deliver it.
-# Returns if no OOB track needed to be delivered.
+	# Reads OOB queue and if a track is pending, will deliver it.
+	# Returns if no OOB track needed to be delivered.
 
-# Read all tracks in OOB queue.
-# Valid tracks in OOB queue must be in the format "oob-X-trackname".
-# X is a numeric (001, 002, etc.) that determines the order.
-
-	@oob_queue=();
-
-	if(!opendir my $d,$obq){
-		Debug::error_out "can't open oob_queue_dir \"$obq\"";
-		Debug::error_out "OOB queue is getting ignored this call";
-	}
-	else
+	# Verify tracks, throw out ones that don't pass check_track for some
+	# reason.
+	my $oob_track;
+	while(42)
 	{
-		while(my $f=readdir($d))
-		{
-# OOB tracks must start with 'oob-'
-		next if(substr($f,0,4) ne 'oob-');
-# ... they must be a file
-		next if(-d "$obq/$f");
-# ... and element X in oob-X-etc must be numeric and not 0
-# TODO: Test if numeric
-		next if((split /-/,$f)[1]==0);
-		push @oob_queue,$f;
-		}
-	closedir $d;
-	}
+		my $temp=DataMoving::oob_queue_pop;
+		return 1 if(!defined($temp));
 
-# Sort OOB queue and use sorted queue to set $next ...
-# If we want to add a track to the OOB queue, $next is the next free number
-
-	my @oob_queue_sorted;
-
-	if(scalar(@oob_queue)==0)
-	{
-# But do nothing if OOB queue is empty
-		Debug::debug_out "OOB queue empty";
-		$next=100;
-	}
-	else
-	{
-# Otherwise, let's sort it.
-		Debug::debug_out "OOB queue has ".scalar(@oob_queue)." item(s)";
-		@oob_queue_sorted=sort{$a cmp $b} @oob_queue;
-		$next=((split /-/,$oob_queue_sorted[0])[1])-1;
-	}
-
-# $next is what number to assign new tracks ...
-# Numbers start at a high value and work downward.
-# (Lowest numbered tracks are played first.  OOB queue is a FIFO.)
-	Debug::debug_out '$OOB::next is '.$next."\n";
-
-# We now have a sorted, non-empty OOB queue,
-
-# At this point we want to play an OOB track.
-
-# Hopefully we do not encounter problems reading OOB queue files, but
-# we set up a loop just in case.  We want to play the first one that
-# passes check_track().
-
-	while(scalar(@oob_queue_sorted)!=0)
-	{
-		my $temp=pop @oob_queue_sorted;
-		my $oob_track="$Conf::conf{'basedir'}/$Conf::conf{'oob_queue_at'}/$temp";
+		#my $oob_track="$Conf::conf{'basedir'}/$temp";
+		$oob_track=$temp; # database stores the whole path
 
 		if(!DeliverTrack::check_track("$oob_track"))
 		{
 		Debug::error_out "check_track() failed on OOB track \"$oob_track\"";
 		Debug::error_out "skipping this OOB track";
 		next;
+		}
+
+		last;
 	}
 
-# OOB tracks are actually removed from the queue on the subsequent
-# call.
-# Funny thing is I didn't put this in at first, and was wondering why
-# all OOB tracks were coming up as file-not-found ... Derp.
+	my $extra='';
+	if(index($oob_track,"ZZ-COMMERCIAL-ZZ")!=-1){$extra="This is $channel - Commercial Break";}
+	if(index($oob_track,"ZZ-STATION-ID-ZZ")!=-1){$extra="This is $channel - Station Identification";}
+	if(index($oob_track,"ZZ-SILENCE----ZZ")!=-1){$extra="This is $channel";}
+	if(index($oob_track,"ZZ------------ZZ")!=-1){$extra="This is $channel";}
+	if(index($oob_track,"ZZ-EMERGENCY--ZZ")!=-1){$extra="EMERGENCY ANNOUNCEMENT";}
 
-		DataMoving::set_rkey("delete-on-next-call","$oob_track");
-		Debug::debug_out "delete-on-next-call \"$oob_track\"";
-
-# Tracks can have these strings in their names to hide their titles from
-# Icecast.
-
-		my $extra='';
-		if(index($oob_track,"ZZ-COMMERCIAL-ZZ")!=-1){$extra="This is $channel - Commercial Break";}
-		if(index($oob_track,"ZZ-STATION-ID-ZZ")!=-1){$extra="This is $channel - Station Identification";}
-		if(index($oob_track,"ZZ-SILENCE----ZZ")!=-1){$extra="This is $channel";}
-		if(index($oob_track,"ZZ------------ZZ")!=-1){$extra="This is $channel";}
-
-		DeliverTrack::now_play($oob_track,$extra,1);
-
-	} # while ...
-
+	DeliverTrack::now_play($oob_track,$extra,1);
 }
 
 sub oob_push
 {
-	Debug::trace_out "*** oob_push(\"$_[0]\"), next=$next";
-	my $srcfile=$_[0]; my $destfile=$_[1];
-
-	Debug::trace_out "oob_push(): $srcfile to $destfile";
-	if(! -e "$srcfile"){return 0;}
-	if(-e "$destfile"){return 1;}
-	@result=qx/ln -s "$srcfile" "$destfile"/;
-	Debug::debug_out "oob_push() result: $result[0]";
-	$next--;
-	return 1;
+	Debug::trace_out "*** oob_push(\"$_[0]\")";
+	if($_[0] eq '')
+	{
+		Debug::trace_out "    first parameter was null, doing nothing";
+		return 1;
+	}
+	my $srcfile=$_[0];
+	if(! -e "$srcfile")
+	{
+		Debug::error_out "[oob_push] track \"$srcfile\" doesn't exist or inaccessible";
+		return 0;
+	}
+	my $result=DataMoving::oob_queue_push($srcfile);
+	return $result;
 }
 
-1;
 
 sub interval_process
 {
@@ -208,18 +119,20 @@ sub interval_process
 #
 	my $in_interval_dir=$_[0];
 	my @interval_tracklist_dirs=();
+	my @this_tracklist;
+	my @this_tracklist_1;
 
-	Debug::trace_out "interval_process(): looking for tracklist subdirs in $in_interval_dir ...";
+	Debug::trace_out "    looking for tracklist subdirs in $in_interval_dir ...";
 
 	opendir my $d,$in_interval_dir;
 	while(my $f=readdir($d))
 	{
-		Debug::debug_out "interval_process(): $in_interval_dir/$f ?";
+		Debug::debug_out "[OOB::interval_process] \"$in_interval_dir/$f\" ?";
 # Reject subdirs that don't start with 'p-'
 		next if(substr($f,0,2) ne 'p-');
 # Reject files that aren't a directory
 		next if(! -d "$in_interval_dir/$f");
-		Debug::debug_out "interval_process(): $in_interval_dir/$f added to interval_tracklist_dirs";
+		Debug::debug_out "[OOB::interval_process] \"$in_interval_dir/$f\" added to interval_tracklist_dirs";
 		push @interval_tracklist_dirs,"$in_interval_dir/$f";
 	}
 	closedir $d;
@@ -228,7 +141,7 @@ sub interval_process
 #
 	if(scalar(@interval_tracklist_dirs)==0)
 	{
-		Debug::debug_out "interval_process() $in_interval_dir: has nothing valid";
+		Debug::debug_out "[OOB::interval_process] \"$in_interval_dir\" has nothing valid";
 		return 0;
 	};
 
@@ -236,11 +149,12 @@ sub interval_process
 	my @interval_tracklist_dirs_sorted=sort{$a cmp $b} @interval_tracklist_dirs;
 
 # Process tracklist directory
-	Debug::trace_out "interval_process(): processing each tracklist ...";
+	Debug::trace_out "    processing each tracklist ...";
 
-	foreach $tls(@interval_tracklist_dirs_sorted)
+	foreach my $tls(@interval_tracklist_dirs_sorted)
 	{
 		# parse directory name.
+		Debug::trace_out "    tracklist \"$tls\" ...";
 		my $tls_param_ordered=0;
 		my $tls_param_length=-1;
 		my $tls_param_eachonce=0;
@@ -260,26 +174,27 @@ sub interval_process
 		# prepare to get list of tracks contained within this
 		# subdirectory.
 	
-		my $this_tracklist=();
+		@this_tracklist=();
 	
 		opendir my $t2,"$tls";
 		while(my $f=readdir($t2))
 		{
-			Debug::trace_out "--- --- $f ?";
+			Debug::trace_out("    --- --- $f ?");
 # Reject . and ..
 			next if($f eq '.'); next if($f eq '..');
 # Reject directories
 			next if (-d "$tls/$f");
-			Debug::trace_out "--- --- $f might add to OOB queue";
+			Debug::trace_out("    --- --- $f might add to OOB queue");
 			push @this_tracklist,"$f";
 		}
+		closedir $t2;
+
 # That's it for this subdirectory if no valid tracks
 		if(scalar(@this_tracklist)==0)
 		{
-			Debug::debug_out "--- --- tracklist has nothing valid";
+			Debug::debug_out("    --- --- tracklist has nothing valid");
 			next;
 		}
-		closedir $t2;
 	
 		my $limit=1;
 		if($tls_param_length==-1)
@@ -291,26 +206,26 @@ sub interval_process
 			$limit=$tls_param_length;
 		}
 	
-		my @this_tracklist_1=();
+		@this_tracklist_1=();
 	
 # ------- random
 		if($tls_param_ordered==0)
 		{
-			Debug::trace_out "interval_process(): random";
+			Debug::trace_out "    interval_process(): random";
 			@this_tracklist_1=shuffle @this_tracklist;
 		}
 
 # ------- ordered
 		if($tls_param_ordered==1)
 		{
-			Debug::trace_out "interval_process(): ordered";
+			Debug::trace_out "    interval_process(): ordered";
 			@this_tracklist_1=sort{$a cmp $b} @this_tracklist;
 		}
 
 # ------- all
-		foreach $t3(@this_tracklist_1)
+		foreach my $t3(@this_tracklist_1)
 		{
-			oob_push("$tls/$t3","$obq/oob-$next-$t3");
+			oob_push("$tls/$t3");
 			$limit--; last if($limit==0);
 		}
 
@@ -415,7 +330,7 @@ sub periodic_process
 			if($interval==20)
 			{
 				Debug::debug_out "Setting need-a-flip flag";
-				DataMoving::set_key('need-a-flip',1);
+				DataMoving::set_rkey('need-a-flip',1);
 			}
 
 			foreach my $subdir(@subdirs)

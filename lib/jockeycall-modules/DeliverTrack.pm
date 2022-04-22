@@ -1,6 +1,7 @@
 package DeliverTrack;
 require 'Debug.pm';
 require 'Concurrency.pm';
+require 'Playlog.pm';
 require 'DataMoving.pm';
 require 'Operation.pm';
 use File::Basename;
@@ -75,16 +76,16 @@ Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
                 DataMoving::set_rkey("now-playing",$_[1]);
         }
 
-        DataMoving::private_playlog_out($_[0]);
+        Playlog::private_playlog_out($_[0]);
         if($_[2]==0)
         {
                 if($_[1] eq '')
                 {
-                        DataMoving::public_playlog_out(basename($_[0]));
+                        Playlog::public_playlog_out(basename($_[0]));
                 }
                 else
                 {
-                        DataMoving::public_playlog_out($_[1]);
+                        Playlog::public_playlog_out($_[1]);
                 }
         }
 
@@ -134,16 +135,16 @@ Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
 		DataMoving::set_rkey("now-playing",$_[1]);
 	}
 
-	DataMoving::private_playlog_out($_[0]);
+	Playlog::private_playlog_out($_[0]);
 	if($_[2]==0)
 	{
 		if($_[1] eq '')
 		{
-			DataMoving::public_playlog_out(basename($_[0]));
+			Playlog::public_playlog_out(basename($_[0]));
 		}
 		else
 		{
-			DataMoving::public_playlog_out($_[1]);
+			Playlog::public_playlog_out($_[1]);
 		}
 	}
 

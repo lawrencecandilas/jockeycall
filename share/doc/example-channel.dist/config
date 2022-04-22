@@ -42,18 +42,6 @@ subdir_wday_thu weekday
 subdir_wday_fri weekday
 subdir_wday_sat weekend
 
-# day_flip_at: When should the next day start?
-#
-# - What time of day that jockeycall starts looking at the next day's schedule.
-#   Most people consider, for example, 12:01 am Sunday part of Saturday night,
-#   and don't consider it Sunday until they go to bed at 2am and wake up the
-#   next day.
-#
-# - Time must be in 1XXXX where XXXX is a 24-hour time, beginning with 0 if
-#   necessary.  E.g. 10200 is 2:00am, 11300 is 1:00pm.
-#
-day_flip_at 10400
-
 # intermission_at: Directory containing intermission tracks
 #
 # - This directory should contain tracks that are delivered during
@@ -70,41 +58,14 @@ day_flip_at 10400
 #
 intermission_at intermission
 
-# vars_at: directory to hold state between calls.
-# 
-# - Must be writeable by the user jockeycall is running as.
-# - Data maintained includes play history for the current timeslot.
+# This item tells jockeycall.pl where the sqlite database holding the channel
+# state is.
 #
-vars_at vars
+# SQLite database(s)--and this option--are only used if the
+# DataMoving_SQLite.pm module is imported instead of DataMoving.pm,
+database database/state.db
 
-# metadatadir_at: directory to hold track metadata.
-#
-# - Must be writeable by the user jockeycall is running as.
-# - jockeycall keeps some info on each song, such as duration, number of times
-#   played, and a "weight" factor.  This will eventually be replaced by a
-#   database.
-# - jockeycall uses the external mp3info command (needs to be installed) to
-#   find out MP3 durations.
-#
-metadatadir metadata
-
-# oob_queue: directory to hold out-of-band queue.
-#
-# - Must be writeable by the user jockeycall is running as.
-# - Interruptions to jockeycall's schedule processing flow are handled as
-#   "Out of Band" tracks.
-# - An event can place references to "Out Of Band" tracks on this queue and
-#   subsequent jockeycall invocations will deliver those when called instead
-#   of selecting from the schedule (or intermission).
-# - Out of Band tracks are removed from queue once played.
-# - jockeycall periodics use the OOB queue to work.  Periodics will have
-#   tracks that need to be delivered at various intervals, e.g. every 30 
-#   minutes, every 20 minutes, etc.  Typical case would be for commercials
-#   or station IDs.
-#
-oob_queue_at oob_queue
-
-# logs_at: directory to hold logs.
+# logs_at: directory to hold logs, relative to channel directory.
 #
 # - Must be writeable by the user jockeycall is running as.
 # - jockeycall writes 2 daily logs:
@@ -114,6 +75,18 @@ oob_queue_at oob_queue
 #     used to verify schedules and periodics are happening as designed.
 #
 logs_at logs
+
+# day_flip_at: When should the next day start?
+#
+# - What time of day that jockeycall starts looking at the next day's schedule.
+#   Most people consider, for example, 12:01 am Sunday part of Saturday night,
+#   and don't consider it Sunday until they go to bed at 2am and wake up the
+#   next day.
+#
+# - Time must be in 1XXXX where XXXX is a 24-hour time, beginning with 0 if
+#   necessary.  E.g. 10200 is 2:00am, 11300 is 1:00pm.
+#
+day_flip_at 10400
 
 # random_percent: chance of random track
 #

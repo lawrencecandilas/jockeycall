@@ -4,6 +4,7 @@ use File::Basename;
 use parent 'Exporter';
 require 'Utility.pm';
 require 'Debug.pm';
+# Cannot depend on DataMoving.pm or DataMoving_SQLite.pm!
 
 # Configuration read, parse, assertions, and ownership (%Conf::conf)
 # Also configuration definition
@@ -19,10 +20,8 @@ $possible_channel_conf_item{'subdir_wday_sat'}	='chanscheddir-required,mapto:sub
 $possible_channel_conf_item{'day_flip_at'}	='time-optional';
 $possible_channel_conf_item{'track_td'}		='chanfile-required';
 $possible_channel_conf_item{'track_um'}		='chanfile-required';
+$possible_channel_conf_item{'database'}		='chandir-required';
 $possible_channel_conf_item{'schedules_at'}	='chandir-required';
-$possible_channel_conf_item{'vars_at'}		='chandir-required';
-$possible_channel_conf_item{'metadatadir'}	='chandir-required';
-$possible_channel_conf_item{'oob_queue_at'}	='chandir-required';
 $possible_channel_conf_item{'intermission_at'}	='chandir-required';
 $possible_channel_conf_item{'logs_at'}		='chandir-required';
 $possible_channel_conf_item{'random_percent'}	='number-optional,range:1-100';
@@ -140,9 +139,10 @@ sub sift_conf_line
 
 # These are set by setdirs() below.
 #
-$conf{'SCD'}='';
-$conf{'VRD'}='';
-#
+$conf{'SCD'}='.';
+# for flatfile
+$conf{'VRD'}='.';
+
 sub setdirs
 {
 # Parameters/info
@@ -152,6 +152,7 @@ sub setdirs
 # Package-level variables used:
 #  $conf{'basedir'},$conf{'subdir_wday'},$conf{'schedules_at'},
 #  $conf{'vars_at'}
+#  $conf{'progvarstable'}
 
 	# Bounce if we get an invalid DOW for some reason.
 	return 0
@@ -160,6 +161,8 @@ sub setdirs
 	my $temp=$conf{'subdir_wday'.$_[0]};
 
 	$conf{'SCD'}="$conf{'basedir'}/$conf{'schedules_at'}/$temp";
+
+	# for flatfiles
 	$conf{'VRD'}="$conf{'basedir'}/$conf{'vars_at'}/$temp";
 
 	return 1;
@@ -282,7 +285,7 @@ sub validate_and_set_conf_line
 		if($validator_type eq 'dir')		{$dir_to_check=$_[1];}
 		if($validator_type eq 'chandir')	{$dir_to_check=$conf{'basedir'}.'/'.$_[1];}
 		if($validator_type eq 'chanscheddir')	{$dir_to_check=$conf{'basedir'}.'/'.$conf{'schedules_at'}."/".$_[1];}
-		if(! -d $dir_to_check)
+		if(! -d dirname($dir_to_check))
 		{
 			if($validator_qualifier eq 'nobannersifbad')
 			{

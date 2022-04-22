@@ -2,7 +2,7 @@ package MetadataProcess;
 use parent 'Exporter';
 require 'Debug.pm';
 require 'Conf.pm';
-require 'DataMoving.pm';
+require 'DataMoving_SQLite.pm';
 
 # Metadata process
 

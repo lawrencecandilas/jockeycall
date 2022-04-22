@@ -1,0 +1,6 @@
+# Just a note of commands I've been using during debugging/development
+#
+#sqlite3 ../share/doc/example-channel/database/state.db .dump | less
+#rm ../share/doc/example-channel/database/state.db
+#JOCKEYCALL_CHANNEL=../share/doc/example-channel JOCKEYCALL_CONF=devel ./jockeycall-ezstream-intake-call.pl
+#JOCKEYCALL_CHANNEL=../share/doc/example-channel JOCKEYCALL_CONF=devel JOCKEYCALL_STDOUT_EVERYTHING=1 ./jockeycall-ezstream-intake-call.pl

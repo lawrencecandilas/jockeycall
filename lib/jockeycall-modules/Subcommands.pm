@@ -40,7 +40,7 @@ sub command_init
 	Debug::trace_out "*** command_init()";
 
 	# next call will do banner flip
-	DataMoving::set_key('need-a-flip',1);
+	DataMoving::set_rkey('need-a-flip',1);
 
 	# push out updated schedule
 	$in_channel=$_[0];
@@ -146,7 +146,7 @@ sub command_transmit
 	# sure how or if worth resolving at the moment.
 
         ## next call will do banner flip
-        ##DataMoving::set_key('need-a-flip',1);
+        ##DataMoving::set_rkey('need-a-flip',1);
 	##
         ## push out updated schedule
         ##BannerUpdate::serviceInterface($in_channel,15,HTMLSchedule::html_schedule($in_channel));
@@ -198,14 +198,71 @@ sub command_transmit
 	}
 }
 
+sub command_oob
+{
+	use OOB;
+	OOB::set_channel($_[0]);
+
+	if(!Concurrency::acquire_lock)
+	{
+		print "unable to acquire lock\n";
+		Concurrency::fail('[Subcommand::command_oob] unable to acquire lock');
+	}
+
+	if($_[1] eq 'dump')
+	{
+		if(!DataMoving::oob_queue_dump)
+		{
+			print "DataMoving::oob_queue_dump failed\n";
+			Concurrency::fail('[Subcommand::command_oob] DataMoving::oob_queue_dump failed');
+		}
+	}
+
+	if($_[1] eq 'push')
+	{
+		if(!OOB::oob_push($_[2]))
+		{
+			print "OOB::oob_push failed\n";
+			Concurrency::fail('[Subcommand::command_oob] OOB::oob_push failed');
+		}
+	}
+
+	if($_[1] eq 'delete')
+	{
+		print "not implemented yet\n";
+	}
+
+	if($_[1] eq 'delete_all')
+	{
+		print "not implemented yet\n";
+	}
+
+	Concurrency::succeed;
+}
+
 sub process_subcommand_other_than_next
 {
 	my $in_channel=$_[0];
 	my $in_command=$_[1];
-	return 1 if($in_command eq 'next');
+	if($in_command eq 'next')
+	{
+		return 1;
+	}
 	
 	my $in_parameter=$_[2];
+	my $in_parameter2=$_[3];
+	my $in_parameter3=$_[4];
 
+	if($in_command eq 'oob')
+	{
+		must_be_something($in_parameter);
+		must_be_one_of($in_parameter,'dump','push','delete','delete_all');
+		if($in_parameter eq 'push'){must_be_something($in_parameter2);}
+		if($in_parameter eq 'delete'){must_be_something($in_parameter2);}
+		command_oob($in_channel,$in_parameter,$in_parameter2);
+		Concurrency::fail("command_oob() returned unexpectedly",2);
+	}
+	
 	if($in_command eq 'bannerflip')
 	{
 		my $in_TimeslotBase=$in_parameter;
@@ -227,6 +284,7 @@ sub process_subcommand_other_than_next
 
 	if($in_command eq 'clearlock')
 	{
+		Debug::trace_out $in_command;
 		if(Concurrency::release_lock(1))
 		{
 			Concurrency::succeed;
@@ -252,9 +310,8 @@ sub process_subcommand_other_than_next
 	if($in_command eq 'ezstream-metadata-provider')
 	{
 		Debug::trace_out $in_command;
-		my $in_subcommand=$in_parameter;
-		must_be_one_of($in_subcommand,'album','artist','title','nothing','');
-		command_emp($in_subcommand);
+		must_be_one_of($in_parameter,'album','artist','title','nothing','');
+		command_emp($in_parameter);
 		Concurrency::fail("command_emp() returned unexpectedly",2);
 	}
 
