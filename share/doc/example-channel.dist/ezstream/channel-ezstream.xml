@@ -19,18 +19,34 @@
    </stream>
   </streams>
 
+ <!--
+  `jockeycall-ezstream-intake-call.pl` is a symlink to `jockeycall.pl` -
+  needed because ezstream doesn't let us put a command line parameter here.
+  No problem, we can work around it.
+  -->
+ <!-- No need to specify full path here.  `jockeycall transmit` will set the
+  PATH environment variable so that ezstream picks up on this command.
+  -->
  <intakes>
   <intake> <name>jockeycall</name>
    <type>program</type> 
-   <filename>./jockeycall-ezstream-intake-call.pl</filename>
+   <filename>jockeycall-ezstream-intake-call.pl</filename>
    <shuffle>0</shuffle>
    <stream_once>0</stream_once>
    </intake>	 
   </intakes>
 
+ <!--
+  `jockeycall-ezstream-metadata-call.pl` is a symlink to `jockeycall.pl` -
+  needed because ezstream doesn't let us put a command line parameter here.
+  Again, no problem, we can work around it.
+  -->
+ <!-- No need to specify full path here.  `jockeycall transmit` will set the
+  PATH environment variable so that ezstream picks up on this command.
+  -->
  <metadata>
   <!-- format_str -->
-  <program>./jockeycall-ezstream-metadata-call.pl</program>
+  <program>jockeycall-ezstream-metadata-call.pl</program>
   <refresh_interval>-1</refresh_interval>
   <normalize_strings>1</normalize_strings>
   <no_updates>0</no_updates>

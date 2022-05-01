@@ -52,15 +52,15 @@ our $dbh_METADATA;
 sub setup
 {
 	# TODO: Handle failure better
+	Debug::trace_out('*** DataMoving::setup() sqlite');
 
-	Debug::trace_out "*** DataMoving::setup() sqlite";
 	my $db_op;
 	my $rv;
 	my %need_to_make;
 
 	# --------------------------------------------------------------------
 	# Get the state database ready
-	Debug::trace_out "    DBI connect for state database: $Conf::conf{'basedir'}/$Conf::conf{'database'}";
+	Debug::trace_out("    [trivial] DBI connect for state database: $Conf::conf{'basedir'}/$Conf::conf{'database'}");
 	$dbh_STATE=DBI->connect_cached("DBI:SQLite:dbname=$Conf::conf{'basedir'}/$Conf::conf{'state_db'}",'','',{RaiseError=>1}) or
 	 do
 	{
@@ -90,7 +90,7 @@ sub setup
 	#
 	if($need_to_make{'oob_queue'}==1)
 	{
-                Debug::trace_out('state database (sqlite): creating oob_queue table');
+                Debug::trace_out('    [trivial] state database (sqlite): creating oob_queue table');
                 my $stmt="
                 create table 'oob_queue'
                  ( position	integer		primary key
@@ -101,7 +101,7 @@ sub setup
 	}
 	if($need_to_make{'rkeys'}==1)
 	{
-		Debug::trace_out('state database (sqlite): creating rkeys table');
+		Debug::trace_out('    [trivial] state database (sqlite): creating rkeys table');
 	        my $stmt='
         	create table rkeys
 	         ( name         text            primary key not null
@@ -113,7 +113,7 @@ sub setup
 
 	# --------------------------------------------------------------------
 	# Get the metadata database ready
-	Debug::trace_out "    DBI connect for metadata database: $Conf::conf{'basedir'}/$Conf::conf{'database'}";
+	Debug::trace_out("    [trivial] DBI connect for metadata database: $Conf::conf{'basedir'}/$Conf::conf{'database'}");
         $dbh_METADATA=DBI->connect_cached("DBI:SQLite:dbname=$Conf::conf{'basedir'}/$Conf::conf{'metadata_db'}",'','',{RaiseError=>1}) or
          do
         {
@@ -143,7 +143,7 @@ sub setup
         #
 	if($need_to_make{'metadata'}==1)
 	{
-		Debug::trace_out "metadata database (sqlite): creating metadata table";
+		Debug::trace_out('    [trivial] metadata database (sqlite): creating metadata table');
 	        my $stmt="
 	        create table metadata
 	         ( md5hash      	text            primary key not null
@@ -164,7 +164,7 @@ our $timeslot_id='';
 our $timeslot_vars_table='uninitialized';
 sub setup_timeslot_vars
 {
-        Debug::trace_out "*** DataMoving::setup_timeslot_vars() sqlite";
+        Debug::trace_out("*** DataMoving::setup_timeslot_vars(\"$_[0]\") sqlite");
 #
 # Parameters/info
 #
@@ -174,7 +174,7 @@ sub setup_timeslot_vars
 	$timeslot_id=main::md5_hex($Conf::conf{'basedir'}.$_[0]);
         $timeslot_vars_table='timeslot_vars_'.$timeslot_id;
 
-        Debug::trace_out "    timeslot_id is $timeslot_id";
+        Debug::trace_out("    timeslot_id is $timeslot_id");
 
         my $db_op=$dbh_STATE->prepare('select name from sqlite_schema where name=?;');
         my $rv=$db_op->execute($timeslot_vars_table) or dbi_error;
@@ -184,13 +184,13 @@ sub setup_timeslot_vars
                 if($row[0] eq $timeslot_vars_table)
                 {
                         # table exists
-                        Debug::trace_out "    existing table found";
+                        Debug::trace_out('    [trivial] existing table found');
                         return 1;
                 }
         }
 
         # create new table for this timeslot_id
-        Debug::trace_out "    creating new timeslot variables table $timeslot_vars_table";
+        Debug::trace_out("    [trivial] creating new timeslot variables table $timeslot_vars_table");
         my $db_op=$dbh_STATE->prepare("select name from sqlite_schema where name=?;");
         my $stmt="
         create table \"$timeslot_vars_table\"
@@ -199,7 +199,7 @@ sub setup_timeslot_vars
           );";
         my $rv=$dbh_STATE->do($stmt);
         if($rv<0){dbi_error; return 0;}
-        set_key('directory',$Conf::conf{'SCD'});
+        set_key('directory',$Conf::conf{'basedir'}.$_[0]);
         set_key('created',$Debug::timestamp_localtime);
         return 1;
 }
@@ -212,18 +212,25 @@ sub track_filter
 # Parameters/info
 #
 # $_[0]: track name
-# $_[1]: schedule zone, 0=green, 1=yellow, 2=red
-#        we don't want to return .opr files if in yellow or red zone.
+# $_[1]: .opr files will be filitered unless this value is 0.
+#	 the current schedule_zone value can be passed here, or pass -1 to
+#	 ignore .opr files for a reason unrelated to schedule_zone.
 # 
 # returns 1 if OK, 0 if caller should skip
 
-	if( (lc(substr($_[0],-4)) eq '.mp3') ){return 1;}
+	return 0 if(($_[0] eq '')or($_[0] eq '.')or($_[0] eq '..'));
+	return 1 if((lc(substr($_[0],-4)) eq '.mp3'));
+
 	# Approve other file types here.
 	if( (lc(substr($_[0],-4)) eq '.opr') ) 
 	{
-		if($_[1]==0)
+		if($_[1]==-1)
 		{
-			Debug::trace_out "    track_filter filters() operation file \"".$_[0]."\" due to current schedule zone not being green.";
+			Debug::trace_out("    track_filter() filtered operation file \"".$_[0]."\"");
+		}
+		if($_[1]!=0)
+		{
+			Debug::trace_out("    track_filter() filtered operation file \"".$_[0]."\" due to current schedule zone not being green.");
 			return 1;
 		}
 		return 0;
@@ -234,7 +241,7 @@ sub track_filter
 
 sub get_candidate_tracks
 {
-	Debug::trace_out "*** DataMoving::get_candidate_tracks($_[0]) sqlite";
+	Debug::trace_out("*** DataMoving::get_candidate_tracks($_[0]) sqlite");
 # Parameters/info
 #
 # $_[0]: Directory containing timeslot tracks
@@ -247,11 +254,13 @@ sub get_candidate_tracks
 # @{$_[7]}: z order
 # $_[8]: difference
 # $_[9]: schedule zone, 0=green, 1=yellow, 2=red
-#        we don't want to return .opr files if in yellow or red zone.
+#	 -1=intermission or other situation where we don't want .opr files
 #
-# Goes through a list of timeslot tracks, eliminates tracks that are
-#  found in a provided history array, and then pushes various data in
-#  provided arrays.
+#        we don't want to return .opr files unless zone is green
+#
+# Goes through a list of timeslot tracks, eliminates tracks that are found
+#  in a provided history array, and then pushes various data in provided
+#  arrays.
 #
 # The arrays can be then sorted using various criteria and then a used
 #  to select a track for delivery.
@@ -274,7 +283,6 @@ sub get_candidate_tracks
 		# Filter all tracks through this function
 		if(track_filter($f,$_[9]))
 		{
-
 			my $md5hash=MetadataProcess::metadata_process("$trackdir/$f",\@{$_[1]},\$cc,\$cl,\$cw,\$flag_dup);
 			next if($md5hash eq '0');
 			# check if we would have enough time in this timeslot
@@ -283,8 +291,8 @@ sub get_candidate_tracks
 			#  intermission, 99999 should be used.
 			if($cl>($_[8]*60))
 			{
-       	        		 Debug::trace_out
-				 "    disqualified $md5hash because it's ".($cl-($_[8]*60))." seconds longer than end of timeslot.";
+       	        		 Debug::trace_out(
+				 "    disqualified $md5hash because it's ".($cl-($_[8]*60))." seconds longer than end of timeslot.");
 				next;	
 			}
 			push @{$_[2]},$f;
@@ -305,7 +313,7 @@ sub get_candidate_tracks
 
 sub read_timeslot_dir
 {
-Debug::trace_out "*** DataMoving::read_timeslot_dir($_[0],$_[1],$_[2]) sqlite";
+Debug::trace_out("*** DataMoving::read_timeslot_dir($_[0],$_[1],$_[2]) sqlite");
 
 # Parameters/info
 #
@@ -322,25 +330,25 @@ Debug::trace_out "*** DataMoving::read_timeslot_dir($_[0],$_[1],$_[2]) sqlite";
 
 	while(my $f=readdir($d))
 	{
-# Reject subdirs that don't start with 't-'
+		# Reject subdirs that don't start with 't-'
 	        next if(substr($f,0,2) ne 't-');
-# Reject files that aren't a directory
+		# Reject files that aren't a directory
 	        my $d1f="$_[0]/$f";
 		next if(! -d $d1f);
 	        if(grep( /^$d1f$/,@{$_[2]}))
 		{
-			next
+			next;
 		}
-	        Debug::trace_out "    push $d1f";
+	        Debug::trace_out("    push $d1f");
    		push @{$_[1]},"$d1f";
 	}
 	closedir $d;
-	Debug::debug_out("    ".scalar(@{$_[1]})." dir(s) found in $_[0]");
+	Debug::debug_out('    '.scalar(@{$_[1]})." subdirectory(ies) found in \"$_[0]\"");
 }
 
 sub read_schedule_dir
 {
-Debug::trace_out "*** DataMoving::read_schedule_dir($_[0])";
+Debug::trace_out("*** DataMoving::read_schedule_dir($_[0])");
 
 # Parameters/info
 #
@@ -352,7 +360,7 @@ Debug::trace_out "*** DataMoving::read_schedule_dir($_[0])";
 	opendir my $d,"$_[0]" or Concurrency::fail("unable to open \"$_[0]\"");
 	while(my $f=readdir($d))
 	{
-	# Skip unwanted things
+		# Skip unwanted things
 		next if($f eq '.'); next if($f eq '..');
 		next if(! -d "$_[0]/$f");
 		next if(length($f)!=5); # if not 5 characters long
@@ -360,12 +368,12 @@ Debug::trace_out "*** DataMoving::read_schedule_dir($_[0])";
 		push @{$_[1]},$f;
 	}
 	closedir $d;
-	Debug::debug_out("    ".scalar(@{$_[1]})." dir(s) found in $_[0]");
+	Debug::debug_out('    '.scalar(@{$_[1]})." dir(s) found in \"$_[0]\"");
 }
 
 sub read_file_string
 {
-Debug::trace_out "*** DataMoving::read_file_string($_[0]) sqlite";
+Debug::trace_out("*** DataMoving::read_file_string($_[0]) sqlite");
 
 # Parameters/info
 #
@@ -382,20 +390,21 @@ Debug::trace_out "*** DataMoving::read_file_string($_[0]) sqlite";
 
 	if(! -e $in_file)
 	{
-		Debug::trace_out "    read_file_string($_[0]): file not found, returning undef";
+		Debug::trace_out(
+		 "    [trivial] file not found, returning undef");
 		return undef;
 	}
 	
 	open(my $f,'<',$in_file) or
 	do{
-		Debug::error_out
-		 "[read_file_string] unable to open $in_file for reading";
+		Debug::error_out(
+		 "[DataMoving::read_file_string] unable to open $in_file for reading");
 		return "";
 	};
 
 	my $file_contents=<$f>;
 
-	Debug::trace_out "    read_file_string($_[0]): data \"$_[1]\"";
+	Debug::trace_out("    [trivial] read data \"$_[1]\"");
 
 	close($f); chomp $file_contents; return $file_contents;
 } 
@@ -403,7 +412,7 @@ Debug::trace_out "*** DataMoving::read_file_string($_[0]) sqlite";
 
 sub get_key
 {
-	Debug::trace_out "*** DataMoving::get_key(\"$_[0]\",\"$_[1]\") sqlite";
+	Debug::trace_out("*** DataMoving::get_key(\"$_[0]\",\"$_[1]\") sqlite");
 	return $_[1] if($_[0] eq '');
 
 # Parameters/info
@@ -423,7 +432,7 @@ sub get_key
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::get_key sqlite] unable to get variable $_[0] from $timeslot_vars_table";
+                Debug::error_out("[DataMoving::get_key sqlite] unable to get variable $_[0] from $timeslot_vars_table");
                 return $_[1];
         }
 
@@ -435,7 +444,7 @@ sub get_key
                 $rows++;
                 if($rows>1)
                 {
-                        Debug::error_out "[DataMoving::get_key sqlite] multiple variable with same name in $timeslot_vars_table, database is bad";
+                        Debug::error_out("[DataMoving::get_key sqlite] multiple variables with same name in  $timeslot_vars_table, database is bad");
                         return $_[1];
                 }
                 $data=$row[0];
@@ -443,21 +452,21 @@ sub get_key
 
         if(!$data)
         {
-		Debug::trace_out "    get_key variable \"$_[0]\" doesn't exist in database";
-		Debug::trace_out "    will return default value supplied in call as read value";
+		Debug::trace_out("    [trivial] variable \"$_[0]\" doesn't exist in database");
+		Debug::trace_out('    [trivial] will return default value supplied in call as read value');
                 # if the default value for a variable is nothing, no point in
                 # issuing an initial write.
 		if($_[1] eq '')
 		{
-			Debug::trace_out "    get_key didn't write anything because the default value is null";
+			Debug::trace_out('    [trivial] did not write anything because the default value is null');
                 	return $_[1];
 		}
 
-                Debug::trace_out "    get_key writes new variable \"$_[0]\" with default value suppled in call, \"$_[1]\"";
+                Debug::trace_out("    [trivial] going to write new variable \"$_[0]\" with default value suppled in call, \"$_[1]\"");
                 set_key($_[0],$_[1]);
                 return $_[1];
         }else{
-                Debug::trace_out "    get_key reads \"$data\" for variable \"$_[0]\" in \"$timeslot_vars_table\"";
+                Debug::trace_out("    [trivial] read \"$data\" for variable \"$_[0]\" in \"$timeslot_vars_table\"");
                 return $data;
         }
 }
@@ -465,7 +474,7 @@ sub get_key
 
 sub get_rkey
 {
-	Debug::trace_out "*** get_rkey(\"$_[0]\",\"$_[1]\") sqlite";
+	Debug::trace_out("*** DataMoving::get_rkey(\"$_[0]\",\"$_[1]\") sqlite");
 	return $_[1] if($_[0] eq '');
 
 # Parameters/info
@@ -488,7 +497,7 @@ sub get_rkey
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::get_rkey sqlite] multiple root keys with same name in rkeys, database is bad";
+                Debug::error_out("[DataMoving::get_rkey sqlite] multiple root-level variables with same name in rkeys, database is bad");
                 return $_[1];
         }
 
@@ -500,7 +509,7 @@ sub get_rkey
 		$rows++;
 		if($rows>1)
 		{
-                	Debug::error_out "[DataMoving::get_rkey sqlite] multiple keys with same name, database is bad";
+                	Debug::error_out("[DataMoving::get_rkey sqlite] multiple root-level variables with same name, database is bad");
 			return $_[1];
 		}	
 		$data=$row[0];	
@@ -512,11 +521,11 @@ sub get_rkey
 		# issuing an initial write.
 		return $_[1] if($_[1] eq '');
 
-                Debug::trace_out "    get_rkey writes new root key \"$_[0]\" with default value \"$_[1]\"";
+                Debug::trace_out("    [trivial] going to write new root-level variable  \"$_[0]\" with default value \"$_[1]\"");
 		set_rkey($_[0],$_[1]);
 		return $_[1];
 	}else{
-                Debug::trace_out "    get_rkey reads \"$data\" for root key \"$_[0]\" in rkeys";
+                Debug::trace_out("    [trivial] read \"$data\" for root-level variable \"$_[0]\" in rkeys");
 		return $data;
 	}
 }
@@ -524,7 +533,7 @@ sub get_rkey
 
 sub set_key
 {
-	Debug::trace_out "*** DataMoving::set_key(\"$_[0]\",\"$_[1]\") sqlite";
+	Debug::trace_out("*** DataMoving::set_key(\"$_[0]\",\"$_[1]\") sqlite");
 	return 0 if($_[0] eq '');
 
 # Parameters/info
@@ -539,7 +548,7 @@ sub set_key
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::set_key sqlite] unable to set variable $_[0] in $timeslot_vars_table";
+                Debug::error_out("[DataMoving::set_key sqlite] unable to set variable $_[0] in $timeslot_vars_table");
                 return 0;
         }
 
@@ -549,7 +558,7 @@ sub set_key
 
 sub set_rkey
 {
-	Debug::trace_out "*** DataMoving::set_rkey(\"$_[0]\",\"$_[1]\") sqlite";
+	Debug::trace_out("*** DataMoving::set_rkey(\"$_[0]\",\"$_[1]\") sqlite");
 	return 0 if($_[0] eq '');
 
 # Parameters/info
@@ -567,7 +576,7 @@ sub set_rkey
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::set_key sqlite] unable to set root variable $_[0]";
+                Debug::error_out("[DataMoving::set_key sqlite] unable to set root-level variable $_[0]");
                 return 0;
         }
 
@@ -577,7 +586,7 @@ sub set_rkey
 
 sub clear_rkey
 {
-	Debug::trace_out "*** DataMoving::clear_rkey(\"$_[0]\") sqlite";
+	Debug::trace_out("*** DataMoving::clear_rkey(\"$_[0]\") sqlite");
 	return 0 if($_[0] eq '');
 #
 # Parameters/info
@@ -595,7 +604,7 @@ sub clear_rkey
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::clear_key sqlite] unable to clear root variable $_[0]";
+                Debug::error_out("[DataMoving::clear_key sqlite] unable to clear root-level variable $_[0]");
                 return 0;
         }
 
@@ -605,7 +614,7 @@ sub clear_rkey
 my %known_tables;
 sub make_table_if_needed
 {
-	Debug::trace_out "*** DataMoving::make_table_if_needed(\"$_[0]\") sqlite";
+	Debug::trace_out("*** [trivial] DataMoving::make_table_if_needed(\"$_[0]\") sqlite");
 # Sub is internal to this module
 #
 # Parameters/info
@@ -620,7 +629,7 @@ sub make_table_if_needed
 #
 	if($known_tables{$_[0]}==1)
 	{
-		Debug::trace_out "    Remembering table \"$_[0]\" exists from earlier";
+		Debug::trace_out("    [trivial] remembering table \"$_[0]\" exists from earlier");
 		return 1;
 	}
 
@@ -632,14 +641,14 @@ sub make_table_if_needed
                 if($row[0] eq $_[0])
                 {
                         # table exists
-                        Debug::trace_out "    existing table for \"$_[0]\" found, using it";
+                        Debug::trace_out("    [trivial] existing table for \"$_[0]\" found, using it");
 			$known_tables{$_[0]}=1;
                         return 1;
                 }
         }
 
         # create new table for this timeslot_id
-        Debug::trace_out "    need to make new table \"$_[0]\"";
+        Debug::trace_out("    [trivial] need to make new table \"$_[0]\"");
         my $db_op=$dbh_STATE->prepare('select name from sqlite_schema where name=?;');
         my $stmt="
         create table \"$_[0]\"
@@ -660,7 +669,7 @@ sub make_table_if_needed
 
 sub new_list
 {
-	Debug::trace_out "*** DataMoving::new_list(\"$_[0]\") sqlite";
+	Debug::trace_out("*** DataMoving::new_list(\"$_[0]\") sqlite");
 	return 0 if($_[0] eq '');
 # Parameters/info
 #
@@ -685,7 +694,7 @@ sub new_list
 	if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::new_list sqlite] DBI error during delete in table for list \"$_[0]\"";
+                Debug::error_out("[DataMoving::new_list sqlite] DBI error during delete in table for list \"$_[0]\"");
                 return 0;
         }
 	return 1;
@@ -694,7 +703,7 @@ sub new_list
 
 sub new_rlist
 {
-        Debug::trace_out "*** DataMoving::new_rlist(\"$_[0]\") sqlite";
+        Debug::trace_out("*** DataMoving::new_rlist(\"$_[0]\") sqlite");
         return 0 if($_[0] eq '');
 # Parameters/info
 #
@@ -719,7 +728,7 @@ sub new_rlist
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::new_rlist sqlite] DBI error during delete in table for root list \"$_[0]\"";
+                Debug::error_out("[DataMoving::new_rlist sqlite] DBI error during delete in table for root list \"$_[0]\"");
                 return 0;
         }
         return 1;
@@ -728,15 +737,15 @@ sub new_rlist
 
 sub append_to_list
 {
-	Debug::trace_out "*** DataMoving::append_to_list(\"$_[0]\",\"$_[1]\") sqlite";
+	Debug::trace_out("*** DataMoving::append_to_list(\"$_[0]\",\"$_[1]\") sqlite");
 	if($_[0] eq '')
 	{
-		Debug::trace_out "    first parameter null, returning error";
+		Debug::error_out('    first parameter null, returning error');
 		return 0;
 	}
 	if($_[1] eq '')
 	{
-		Debug::trace_out "    second parameter null, returning success";
+		Debug::trace_out('    second parameter null, returning success');
 		return 1;
 	}
 # Parameters/info
@@ -748,7 +757,7 @@ sub append_to_list
 #
 	my $list_table='list_'.$_[0].'_'.$timeslot_id;
 	return 0 if(make_table_if_needed($list_table)==0);
-	Debug::trace_out "    make_table_if_needed returned without error";
+	Debug::trace_out('    [trivial] make_table_if_needed returned without error');
 
         my $db_op=$dbh_STATE->prepare('insert into "'.$list_table.'" (value) values (?);');
 	# We're not setting 'id' column here because ...
@@ -762,7 +771,7 @@ sub append_to_list
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::append_to_list sqlite] DBI error during insert \"$[1]\" in table for list \"$_[0]\"";
+                Debug::error_out("[DataMoving::append_to_list sqlite] DBI error during insert \"$[1]\" in table for list \"$_[0]\"");
                 return 0;
         }
 }
@@ -770,15 +779,15 @@ sub append_to_list
 
 sub append_to_rlist
 {
-        Debug::trace_out "*** DataMoving::append_to_rlist(\"$_[0]\",\"$_[1]\") sqlite";
+        Debug::trace_out("*** DataMoving::append_to_rlist(\"$_[0]\",\"$_[1]\") sqlite");
         if($_[0] eq '')
         {
-                Debug::trace_out "    first parameter null, returning error";
+                Debug::debug_out('    first parameter null, returning error');
                 return 0;
         }
         if($_[1] eq '')
         {
-                Debug::trace_out "    second parameter null, returning success";
+                Debug::trace_out('    second parameter null, returning success');
                 return 1;
         }
 # Parameters/info
@@ -791,7 +800,7 @@ sub append_to_rlist
 #
         my $list_table='rlist_'.$_[0];
         return 0 if(make_table_if_needed($list_table)==0);
-        Debug::trace_out "    make_table_if_needed returned without error";
+        Debug::trace_out('    [trivial] make_table_if_needed returned without error');
 
         my $db_op=$dbh_STATE->prepare('insert into "'.$list_table.'" (value) values (?);');
         # We're not setting 'id' column here because ...
@@ -805,7 +814,7 @@ sub append_to_rlist
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::append_to_rlist sqlite] DBI error during insert \"$[1]\" in table for rlist \"$_[0]\"";
+                Debug::error_out("[DataMoving::append_to_rlist sqlite] DBI error during insert \"$[1]\" in table for rlist \"$_[0]\"");
                 return 0;
         }
 	return 1;
@@ -814,7 +823,7 @@ sub append_to_rlist
 
 sub read_list
 {
-	Debug::trace_out "*** DataMoving::read_list(\"$_[0]\") sqlite";
+	Debug::trace_out("*** DataMoving::read_list(\"$_[0]\") sqlite");
 # Parameters/info
 #
 # $_[0]: List to read, will be created if it does not exist.
@@ -824,14 +833,14 @@ sub read_list
 #
 	my $list_table='list_'.$_[0].'_'.$timeslot_id;
 	return 0 if(make_table_if_needed($list_table)==0);
-	Debug::trace_out "    make_table_if_needed returned without error";
+	Debug::trace_out('    [trivial] make_table_if_needed returned without error');
 
         my $db_op=$dbh_STATE->prepare('select value from "'.$list_table.'";');
 	my $rv=$db_op->execute();
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::read_list sqlite] DBI error during select on table for list \"$_[0]\"";
+                Debug::error_out("[DataMoving::read_list sqlite] DBI error during select on table for list \"$_[0]\"");
 		return @empty_list=undef;
         }
 
@@ -841,14 +850,14 @@ sub read_list
 		push @rows_of_data,@row;
         }
 
-	Debug::trace_out "    existing list ".scalar(@rows_of_data)." lines";
+	Debug::trace_out("    existing list ".scalar(@rows_of_data)." lines");
 	return @rows_of_data;
 }
 
 
 sub read_rlist
 {
-        Debug::trace_out "*** DataMoving::read_rlist(\"$_[0]\") sqlite";
+        Debug::trace_out("*** DataMoving::read_rlist(\"$_[0]\") sqlite");
 # Parameters/info
 #
 # $_[0]: Root list to read, will be created if it does not exist.
@@ -858,14 +867,14 @@ sub read_rlist
 #
         my $list_table='rlist_'.$_[0];
         return 0 if(make_table_if_needed($list_table)==0);
-        Debug::trace_out "    make_table_if_needed returned without error";
+        Debug::trace_out('    [trivial] make_table_if_needed returned without error');
 
         my $db_op=$dbh_STATE->prepare('select value from "'.$list_table.'";');
         my $rv=$db_op->execute();
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::read_rlist sqlite] DBI error during select on table for rlist \"$_[0]\"";
+                Debug::error_out("[DataMoving::read_rlist sqlite] DBI error during select on table for rlist \"$_[0]\"");
                 return @empty_list=undef;
         }
 
@@ -875,7 +884,7 @@ sub read_rlist
                 push @rows_of_data,@row;
         }
 
-        Debug::trace_out "    existing rlist ".scalar(@rows_of_data)." lines";
+        Debug::trace_out("    existing rlist ".scalar(@rows_of_data)." lines");
         return @rows_of_data;
 }
 
@@ -888,13 +897,13 @@ sub oob_queue_dump
 #
 # Intended for use by oob dump subcommand.
 #
-	Debug::trace_out "*** DataMoving::oob_queue_dump() sqlite";
+	Debug::trace_out('*** DataMoving::oob_queue_dump() sqlite');
 	my $db_op=$dbh_STATE->prepare('select "position","track" from "oob_queue" order by "position" desc;');
 	my $rv=$db_op->execute();
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::oob_queue_dump sqlite] DBI error during select";
+                Debug::error_out("[DataMoving::oob_queue_dump sqlite] DBI error during select");
                 return undef;
         }
 	my $printed_anything=0;
@@ -919,10 +928,10 @@ sub oob_queue_push
 #
 # Returns 1 if track pushed successfully, 0 if not.
 #
-	Debug::trace_out "*** DataMoving::oob_queue_push(\"$_[0]\") sqlite";
+	Debug::trace_out("*** DataMoving::oob_queue_push(\"$_[0]\") sqlite");
 	if($_[0] eq '')
 	{
-		Debug::trace_out "    first parameter was null, doing nothing";
+		Debug::trace_out('    first parameter was null, doing nothing');
 		return 1;
 	}
 
@@ -938,7 +947,7 @@ sub oob_queue_push
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::oob_queue_push sqlite] DBI error during insert of track \"$[0]\" to OOB queue";
+                Debug::error_out("[DataMoving::oob_queue_push sqlite] DBI error during insert of track \"$[0]\" to OOB queue");
                 return 0;
         }
 	return 1;
@@ -947,7 +956,7 @@ sub oob_queue_push
 
 sub oob_queue_pop
 {
-	Debug::trace_out "*** DataMoving::oob_queue_pop sqlite";
+	Debug::trace_out('*** DataMoving::oob_queue_pop sqlite');
 # Parameters/info
 #
 # Takes no arguments.  Will pop most recent OOB track pushed on to stack, or
@@ -958,20 +967,20 @@ sub oob_queue_pop
 	if($rv<0)
 	{
 		dbi_error;
-		Debug::error_out "[DataMoving::oob_queue_pop sqlite] DBI error during select";
+		Debug::error_out("[DataMoving::oob_queue_pop sqlite] DBI error during select");
 		return undef;
 	}
 	my $out=undef;
 	while(my @row=$db_op->fetchrow_array())
 	{
 		$out=$row[1];
-		Debug::trace_out "    top row is \"$row[0]\", \"$row[1]\"";
+		Debug::trace_out("    [trivial] top row is \"$row[0]\", \"$row[1]\"");
 		my $db_op=$dbh_STATE->prepare('delete from "oob_queue" where position=?');
 		$rv=$db_op->execute($row[0]);
 		if($rv<0)
 		{
 			dbi_error;
-			Debug::error_out "[DataMoving::oob_queue_pop sqlite] DBI error during delete of track \"$row[1]\" from OOB queue position $row[0]";
+			Debug::error_out("[DataMoving::oob_queue_pop sqlite] DBI error during delete of track \"$row[1]\" from OOB queue position $row[0]");
 		}
 		last;
 	}
@@ -982,7 +991,7 @@ sub oob_queue_pop
 
 sub get_metadata
 {
-	Debug::trace_out "*** DataMoving::get_metadata($_[0])";
+	Debug::trace_out("*** DataMoving::get_metadata($_[0])");
 # Parameters/info
 #
 # $_[0]: md5
@@ -998,7 +1007,7 @@ sub get_metadata
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::get_metadata sqlite] unable to get metadata of $_[0] from metadata table";
+                Debug::error_out("[DataMoving::get_metadata sqlite] unable to get metadata of $_[0] from metadata table");
                 return $_[1];
         }
 
@@ -1008,7 +1017,7 @@ sub get_metadata
                 $rows++;
                 if($rows>1)
                 {
-                        Debug::error_out "[DataMoving::get_metadata sqlite] multiple keys with same md5 in metadata table, database is bad";
+                        Debug::error_out("[DataMoving::get_metadata sqlite] multiple keys with same md5 in metadata table, database is bad");
                         return undef;
                 }
 		%out_metadata=(c=>$row[0],l=>$row[1],w=>$row[2])
@@ -1020,7 +1029,7 @@ sub get_metadata
 
 sub set_metadata
 {
-	Debug::trace_out "*** DataMoving::set_metadata($_[0],$_[1]) sqlite";
+	Debug::trace_out("*** DataMoving::set_metadata($_[0],$_[1]) sqlite");
 # Parameters/info
 #
 # $_[0]: md5
@@ -1033,7 +1042,7 @@ sub set_metadata
         if($rv<0)
         {
                 dbi_error;
-                Debug::error_out "[DataMoving::set_metadata sqlite] unable to set metadata for $_[0]";
+                Debug::error_out("[DataMoving::set_metadata sqlite] unable to set metadata for $_[0]");
                 return 0;
         }
 

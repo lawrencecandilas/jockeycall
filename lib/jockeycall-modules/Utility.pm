@@ -23,8 +23,8 @@ sub usage
 	print "  JOCKEYCALL_CHANNEL environment variable defined, which should be your\n";
 	print "  channel directory\n";
 	print "  ... or ...\n";
-	print "- if the subcommand is 'transmit', the command-line argument after that\n";
-	print "  needs to be the channel directory.\n";
+	print "- if the subcommand is 'transmit' or 'test':\n";
+	print "  The command-line argument after that needs to be the channel directory.\n";
 	print "\n";
 	print "To do the environment variable stuff above from bash, try:\n";
 	print "$ export JOCKEYCALL_CHANNEL=/dir/to/channel $0 {subcommand} {parameters}\n";

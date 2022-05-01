@@ -12,7 +12,7 @@ our @EXPORT=qw(
 
 sub metadata_process
 {
-	Debug::trace_out("*** metadata_process($_[0])");
+	Debug::trace_out("*** MetadataProcess::metadata_process($_[0])");
 	return 0 if($_[0] eq '');
 	return 0 if(-d "$_[0]");
 	return 0 if($_[0] eq '.');
@@ -23,7 +23,6 @@ sub metadata_process
 # Converts $_[0], assumed to be a filename of a song, to a md5hash.
 # Then retrieves metadata record for that md5hash, parses the records and
 # distributes the values among the variables pointed to by references.
-# A database would probably be much better.
 #
 # If md5hash is found in provided history, it returns without doing
 # anything else except setting $_[5] to 1.

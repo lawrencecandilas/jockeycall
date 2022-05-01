@@ -10,7 +10,7 @@ sub release_lock; # predeclared because we use it in succeed() below
 
 sub succeed
 {
-Debug::trace_out "*** succeed($_[0])";
+Debug::trace_out("*** [trivial] Concurrency::succeed($_[0])");
 # Parameters/info
 #
 # Reports success and then exits program with error code 0.
@@ -25,7 +25,7 @@ Debug::trace_out "*** succeed($_[0])";
 	# Optional succeed debug message.
 	if($_[0] ne ''){Debug::debug_out $_[0];}
 	
-	Debug::debug_out 'reporting success and exiting.';
+	Debug::debug_out('reporting success and exiting.');
 	
 	Debug::debug_message_management(2);
 
@@ -34,7 +34,7 @@ Debug::trace_out "*** succeed($_[0])";
 
 sub fail
 {
-Debug::trace_out "*** fail($_[0])";
+Debug::trace_out("*** [trivial] Concurrency::fail(\"$_[0]\",$_[1])");
 # Parameters/info
 #
 # Reports failure and then exits program with error code 1.
@@ -58,7 +58,7 @@ Debug::trace_out "*** fail($_[0])";
 	# If we were processing a command-line command, below is usual.
 	if($_[1]==2){print "$_[0]\n";}
 	
-	Debug::debug_out 'reporting failure and exiting.';
+	Debug::debug_out('reporting failure and exiting.');
 	
 	Debug::debug_message_management(2);
 	
@@ -70,7 +70,7 @@ our $concurrency_lock_flag_acquired;
 
 sub acquire_lock
 {
-	Debug::trace_out "*** acquire_lock()";
+	Debug::trace_out('*** [trivial] Concurrency::acquire_lock()');
 	fail('Conf::check_conf_basedir() failed')if(Conf::check_conf_basedir!=1);
 
 	# Report error if we try to acquire a lock while already acquired.
@@ -98,7 +98,7 @@ sub acquire_lock
 		Debug::error_out('[Concurrency::acquire_lock] concurrency_lock_code not defined');
 		return 0;
 	}
-	Debug::debug_out "[Concurrency::acquire_lock] I am told the lock code is \"$concurrency_lock_code\"";
+	Debug::trace_out("    [trivial] I am told the lock code is \"$concurrency_lock_code\"");
 
 	my $lockfile="$Conf::conf{'basedir'}/lockfile";
 
@@ -112,7 +112,7 @@ sub acquire_lock
 # give up if out of tries.
 	if($tries==0)
 	{
-		Debug::debug_out("[Concurrency::acquire_lock] existing lock never disappeared");
+		Debug::debug_out('[Concurrency::acquire_lock] existing lock never disappeared');
 	return 0;
 	}
 
@@ -155,10 +155,10 @@ sub acquire_lock
 			return 0;
 		};
 #chomp $lockfile_readback;
-		Debug::debug_out "[Concurrency::acquire_lock] lockfile_readback is \"$lockfile_readback\"";
+		Debug::trace_out("    [trivial] lockfile_readback is \"$lockfile_readback\"");
 		if($lockfile_readback ne $concurrency_lock_code)
 		{
-			Debug::error_out "[Concurrency::acquire_lock] lockfile readback did not match lock code \"$concurrency_lock_code\"";
+			Debug::error_out("[Concurrency::acquire_lock] lockfile readback did not match initial lock code \"$concurrency_lock_code\"");
 			return 0;
 		}
 		close $f2
@@ -173,8 +173,8 @@ sub acquire_lock
 
 # lock file exists if we get here.
 # wait a tiny bit and try again.
-	Debug::debug_out('[Concurrency::acquire_lock] lockfile exists, trying again in 0.25 second(s)');
-	sleep .25;
+	Debug::debug_out('[Concurrency::acquire_lock] lockfile exists, trying again in 0.5 second(s)');
+	sleep .5;
 
 	}
 
@@ -182,7 +182,7 @@ sub acquire_lock
 }
 
 sub release_lock{
-	Debug::trace_out "*** release_lock()";
+	Debug::trace_out("*** release_lock($_[0])");
 	return 1 if(($concurrency_lock_flag_acquired==0)and($_[0]!=1));
 
 # Parameters/info
@@ -193,7 +193,6 @@ sub release_lock{
 #
 # $_[0]: Set to 1 to ignore internal "lock acquired" flag and try to
 #        remove the lock anyway.
-#        Used by lockbreak subcommand.
 #
 # External variables used:
 #  $Conf::conf{'basedir'}
@@ -205,7 +204,7 @@ sub release_lock{
 
 	if(! -e $lockfile)
 	{
-		Debug::trace_out("    lockfile \"$lockfile\" didn't exist anyway");
+		Debug::trace_out("    [trivial] lockfile \"$lockfile\" didn't exist anyway");
 		return 1;
 	}
 
@@ -217,6 +216,7 @@ sub release_lock{
 
 	return 1;
 }
+
 
 1;
 

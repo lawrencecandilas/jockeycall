@@ -3,19 +3,25 @@
 # Keep in mind: jockeycall's whole job is to look at a directory containing an
 # arrangement of schedules, according to the current time and history of 
 # played items, and output the path of an MP3 that should be played.
+#
 # - This is called 'delivering a track.'
+#
 # - This integrates with ezstream--an instance of ezstream which should be
 # pointed to a working icecast server.
+#
+# If you don't have a working Icecast setup, figure that out first. :)
 
 # Configuration options:
 
 # schedules_at: Directory that contains schedules.
 #
-# - This is relative to the path jockeycall gets as the first argument, which
-#   is the channel directory.
+#
+# - This is relative to the channel directory path, set as the first argument
+#   for `jockeycall.pl transmit`, or otherwise set using the
+#   JOCKEYCALL_CHANNEL environment variable.
 #
 #   - For example, if you call jockeycall with the following:
-#     `jockeycall /usr/share/jockeycall/example-station ...`
+#     `jockeycall.pl transmit /usr/share/jockeycall/example-station ...`
 #     then jockeycall looks at 
 #      "/usr/share/jockeycall/example-station/schedule"
 #     for schedules.
@@ -29,7 +35,7 @@ schedules_at schedule
 # - These are relative to the schedule directory above.
 #
 #   - For example, if you call jockeycall with the following:
-#     `jockeycall /usr/share/jockeycall/example-station ...`
+#     `jockeycall.pl transmit /usr/share/jockeycall/example-station ...`
 #     then jockeycall looks at 
 #      "/usr/share/jockeycall/example-station/schedule/normal/weekday"
 #     if "normal/weekday" is defined for one of the days of the week below.
@@ -44,33 +50,67 @@ subdir_wday_sat weekend
 
 # intermission_at: Directory containing intermission tracks
 #
+# - This is relative to the channel directory path, set as the first argument
+#   for `jockeycall.pl transmit`, or otherwise set using the
+#   JOCKEYCALL_CHANNEL environment variable.
+#
 # - This directory should contain tracks that are delivered during
 #   intermission.
+#
 # - jockeycall will go into intermission if a timeslot ends.
+#
 #   - This happens if is set to not repeat and it's not time for the next
 #     timeslot yet.
+#
 #   - Also happens if it's toward the end of a timeslot and jockeycall can't
 #     find a track that will fit in the alloted time.
+#
 #   - Also happens if you simply don't define any schedules.
 #
 # - If you have no schedules and no intermission tracks, jockeycall will 
-#   select the "Under Maintenance" track as defined below.
+#   assume you screwed up and deliver the "Technical Difficulties" track.
 #
 intermission_at intermission
 
 # This item tells jockeycall.pl where the sqlite database holding the channel
 # state is.
 #
+# - This is relative to the channel directory path, set as the first argument
+#   for `jockeycall.pl transmit`, or otherwise set using the
+#   JOCKEYCALL_CHANNEL environment variable.
+# - The FILE doesn't have to exist but the directory specified here does.
+#
+# This database can be deleted at any time, the worst that'll happen is that
+# you'll hear songs again because this database contains the play histories.
+#
 state_db database/state.db
 
 # This item tells jockeycall.pl where the sqlite database holding the metadata
 # cache is.
 #
+# - This is relative to the channel directory path, set as the first argument
+#   for `jockeycall.pl transmit`, or otherwise set using the
+#   JOCKEYCALL_CHANNEL environment variable.
+# - The FILE doesn't have to exist but the directory specified here does.
+
+# When jockeycall.pl encounters a track it hasn't seen before, it will run
+# mp3info on it to determine how long it is, and cache the data here for later
+# faster lookup.  It also stores play count and other information.
+#
+# This database can be deleted at any time, the worst that'll happen is a 
+# delay when jockeycall.pl enters a new timeslot and runs mp3info on every
+# track, and a reset of the play counts.
+#
 metadata_db database/metadata.db
 
 # logs_at: directory to hold logs, relative to channel directory.
 #
+# - This is relative to the channel directory path, set as the first argument
+#   for `jockeycall.pl transmit`, or otherwise set using the
+#   JOCKEYCALL_CHANNEL environment variable.
+#
 # - Must be writeable by the user jockeycall is running as.
+#
 # - jockeycall writes 2 daily logs:
 #   - "public" logs that are simply a list of times and tracks played,
 #     periodics are not included.
@@ -91,23 +131,49 @@ logs_at logs
 #
 day_flip_at 10400
 
+# random_at: directory to hold channel random tracks.
+#
+# - This is relative to the channel directory path, set as the first argument
+#   for `jockeycall.pl transmit`, or otherwise set using the
+#   JOCKEYCALL_CHANNEL environment variable.
+#
+# - Some percentage of the time, jockeycall will decide to ignore the flow and
+# play a random track, if random tracks are provided.
+#
+# - This setting controls a channel-wide directory where jockeycall will look 
+# and select tracks from.  This directory is optional.
+#
+#   Additionally, a directory called 'random' can optionally exist in a
+# schedule's timeslot.
+#
+#   Tracks from both directories are combined into a pool for selection when
+# it's random time.
+#
+# - Nothing happens if:
+#   * there is no `random` directory(ies) at all
+#   * the random directory(ies) exist but are empty
+#   * all tracks in the directory(ies) have been played in that timeslot.
+#
+random_at random
+
 # random_percent: chance of random track
 #
-# - A directory called 'random' can exist in a schedule's timeslot.
-# - This is the percentage of time you'd like a track to be picked from the
-#   'random' directory instead of the schedule's current timeslot.
-# - Nothing happens if there is no `random` directory, it's empty, or all
-#   tracks in the random directory have already been played in that timeslot.
+# jockeycall picks a random number 0 to 99, and if it's equal to or under
+# this number, it's random time.
 #
-random_percent 2
+random_percent 42
 
 # track_td: technical difficulties track
 #
-# - This is relative to the path jockeycall gets as the first argument, which
-#   is the channel directory.
+# - This is relative to the channel directory path, set as the first argument
+#   for `jockeycall.pl transmit`, or otherwise set using the
+#   JOCKEYCALL_CHANNEL environment variable.
 #
-# - If jockeycall runs into trouble it will deliver this track, such as not
-#   being able to open or read a file.
+# - If jockeycall runs into trouble it will deliver this track.
+#   Possible situations are not being able to open or read anything.
+#   (Note: Configuration failures typically prevent jockeycall from even 
+#   starting.)
+#
 # - This track is also delivered if there are no schedules and no tracks in the
 #   intermissions.
 #
@@ -115,8 +181,9 @@ track_td alerts/td.mp3
 
 # track_um: under maintenance track
 #
-# - This is relative to the path jockeycall gets as the first argument, which
-#   is the channel directory.
+# - This is relative to the channel directory path, set as the first argument
+#   for `jockeycall.pl transmit`, or otherwise set using the
+#   JOCKEYCALL_CHANNEL environment variable.
 #
 # - This track will be delivered over and over if jockeycall is in maintenance
 #   mode.

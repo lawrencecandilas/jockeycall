@@ -1,4 +1,5 @@
 package Subcommands;
+use File::Basename;
 use parent 'Exporter';
 require 'Debug.pm';
 require 'Conf.pm';
@@ -15,7 +16,7 @@ our @EXPORT=qw(
 
 sub must_be_something
 {
-	Debug::trace_out "*** must_be_something(\"$_[0]\")";
+	Debug::trace_out "*** Subcommand::must_be_something(\"$_[0]\")";
 
 # Small subroutine to ensure parameter exists.
 # Won't return if there is an issue, calls fail with option 2.
@@ -25,7 +26,7 @@ sub must_be_something
 
 sub must_be_one_of
 {
-	Debug::trace_out "*** must_be_one_of(\"$_[0]\")";
+	Debug::trace_out "*** Subcommand::must_be_one_of(\"$_[0]\")";
 
 # Small subroutine to ensure parameter is one of a few desired strings.
 # Won't return if there is an issue, calls fail with option 2.
@@ -37,7 +38,7 @@ sub must_be_one_of
 
 sub command_init
 {
-	Debug::trace_out "*** command_init()";
+	Debug::trace_out "*** Subcommand::command_init()";
 
 	# next call will do banner flip
 	DataMoving::set_rkey('need-a-flip',1);
@@ -51,7 +52,7 @@ sub command_init
 
 sub command_hsd
 {
-	Debug::trace_out "*** command_hsd()";
+	Debug::trace_out "*** Subcommand::command_hsd()";
 #
 # hsd stands for HTML Schedule Dump
 # 
@@ -65,7 +66,7 @@ sub command_hsd
 
 sub command_emp
 {
-	Debug::trace_out "*** command_emp(\"$_[0]\")";
+	Debug::trace_out "*** Subcommand::command_emp(\"$_[0]\")";
 
 # emp stands for Ezstream Metadata Provider.
 #
@@ -75,7 +76,7 @@ sub command_emp
 #
 # This appears to be needed to avoid the artist/title being garbled.
 
-	my $temp=DataMoving::get_rkey("now-playing");
+	my $temp=DataMoving::get_rkey('now-playing');
 
 	if($_[0] eq 'artist')
 	{
@@ -110,7 +111,7 @@ sub command_emp
 
 sub command_bannerflip
 {
-	Debug::trace_out "*** command_bannerflip() ***";
+	Debug::trace_out "*** Subcommand::command_bannerflip() ***";
 
 	# Note:
 	# BannerUpdate::set_channel() is done already by main
@@ -130,9 +131,48 @@ sub command_bannerflip
 	Concurrency::succeed;
 }
 
+sub command_test
+{
+	Debug::trace_out("*** Subcommand::command_test(\"$_[0]\",\"$_[1]\",\"$_[2]\") ***");
+	$in_channel=$_[0];
+	$in_start_datestring=$_[1];
+	$in_end_datestring=$_[2];
+
+	my $track_name;
+	my $track_playtime_seconds;
+	my $d=$in_start_datestring;
+	my $days=0;
+	my $days_limit=1;
+	my $s=0;
+
+	while(42)
+	{
+		my $output=`JOCKEYCALL_SIMULATION_MODE=1 JOCKEYCALL_DAY_OFFSET=$days JOCKEYCALL_TIMESLOT=$d ./jockeycall-ezstream-intake-call.pl`;
+		$track_name=(split(/\;/,$output))[0];
+		chomp $track_name;
+		$track_playtime_seconds=(split(/\;/,$output))[1];
+		
+		print $d.": $track_name\n";
+
+		$d1=Utility::datestring_to_minutes($d);
+		$d1=$d1+int(($track_playtime_seconds)/60);
+		$s=$s+$track_playtime_seconds-(60*(int($track_playtime_seconds)/60));
+		if($s>60){$s=$s-60;$d1++;}
+		if($d1>1439)
+		{
+			$d1=$d1-1440;
+			$days++;
+		}
+		$d=Utility::minutes_to_datestring($d1);
+
+		last if(($d>=$in_end_datestring)and($days==$days_limit));
+	}
+	Concurrency::succeed;
+}
+
 sub command_transmit
 {
-	Debug::trace_out "*** command_transmit() ***";
+	Debug::trace_out("*** Subcommand::command_transmit(\"$_[0]\") ***");
 	$in_channel=$_[0];
 
 	# Hapless user probably wants to see errors on the terminal.
@@ -154,11 +194,14 @@ sub command_transmit
 	# Transmission loop
 	# This was a bash script.
 
-	#if(! -e "$Conf::Conf{'jockeycall_bin_ezstream'}")
-	#	{
-	#	Concurrency::fail("can't find ezstream at \"".$Conf::conf{'jockeycall_bin_ezstream'}."\", so install it if you want to do this.");
-	#	}
-		
+	# This adds the directory that jockeycall.pl is running from to the 
+	# PATH for subsequent processes, such as the one we're about to spawn
+	# with `system` below.
+	# This enables us to not have to specify the full path to the executable in
+	# the ezstream XML file.
+	$ENV{'PATH'}=$Conf::conf{'mypath'}.':'.$ENV{'PATH'};
+	print "PATH is set to \"$ENV{'PATH'}\"\n";
+
 	my $ezstream_xml_file="$Conf::conf{'basedir'}/ezstream/channel-ezstream.xml";
 	if(! -e $ezstream_xml_file)
 	{
@@ -242,16 +285,20 @@ sub command_oob
 
 sub process_subcommand_other_than_next
 {
+	Debug::trace_out("*** Subcommand::process_subcommand_other_than_next(\"$_[0]\",\"$_[1]\")");
 	my $in_channel=$_[0];
 	my $in_command=$_[1];
+
 	if($in_command eq 'next')
 	{
+		Debug::trace_out('subcommand is next - bouncing back'); 
 		return 1;
 	}
 	
 	my $in_parameter=$_[2];
 	my $in_parameter2=$_[3];
 	my $in_parameter3=$_[4];
+	Debug::trace_out("    Parameters: \"$_[2]\",\"$_[3]\",\"$_[4]\"");
 
 	if($in_command eq 'oob')
 	{
@@ -260,7 +307,7 @@ sub process_subcommand_other_than_next
 		if($in_parameter eq 'push'){must_be_something($in_parameter2);}
 		if($in_parameter eq 'delete'){must_be_something($in_parameter2);}
 		command_oob($in_channel,$in_parameter,$in_parameter2);
-		Concurrency::fail("command_oob() returned unexpectedly",2);
+		Concurrency::fail('Subcommand::command_oob() returned unexpectedly',2);
 	}
 	
 	if($in_command eq 'bannerflip')
@@ -284,56 +331,47 @@ sub process_subcommand_other_than_next
 
 	if($in_command eq 'clearlock')
 	{
-		Debug::trace_out $in_command;
 		if(Concurrency::release_lock(1))
 		{
 			Concurrency::succeed;
 		}
 		else
 		{
-			Concurrency::fail('release_lock() failed',2);
+			Concurrency::fail('Concurrency::release_lock() failed',2);
 		}
-	}
-
-	if($in_command eq 'test')
-	{
-		if(!Utility::check_datestring($ARGV[2]))
-		{
-			Concurrency::fail('bad datestring',2);
-		}
-		$main::TESTMODE=1;
-		$main::TESTMODE_datestring=$ARGV[2];
-		Concurrency::release_lock(1);
-		return 0;
 	}
 
 	if($in_command eq 'ezstream-metadata-provider')
 	{
-		Debug::trace_out $in_command;
 		must_be_one_of($in_parameter,'album','artist','title','nothing','');
 		command_emp($in_parameter);
-		Concurrency::fail("command_emp() returned unexpectedly",2);
+		Concurrency::fail('Subcommand::command_emp() returned unexpectedly',2);
 	}
 
 	if($in_command eq 'html-schedule-dump')
 	{
-		Debug::trace_out $in_command;
 		command_hsd($in_channel);
-		Concurrency::fail("command_hsd() returned unexpectedly",2);
+		Concurrency::fail('Subcommand::command_hsd() returned unexpectedly',2);
 	}
 
 	if($in_command eq 'init')
 	{
-		Debug::trace_out $in_command;
 		command_init($in_channel);
-		Concurrency::fail("command_init() returned unexpectedly",2);
+		Concurrency::fail('Subcommand::command_init() returned unexpectedly',2);
 	}
 
 	if($in_command eq 'transmit')
 	{
-		Debug::trace_out $in_command;
 		command_transmit($in_channel);
 		Concurrency::succeed;	
+	}
+
+	if($in_command eq 'test')
+	{
+		if($in_parameter eq ''){$in_parameter=$Conf::conf{'day_flip_at'};}
+		if($in_parameter2 eq ''){$in_parameter2='12359';}
+		command_test($in_channel,$in_parameter,$in_parameter2);
+		Concurrency::succeed;
 	}
 
 	Concurrency::fail("Unknown command $in_command",2);

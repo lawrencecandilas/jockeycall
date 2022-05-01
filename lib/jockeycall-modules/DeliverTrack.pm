@@ -25,7 +25,7 @@ our $play_log_file='playlog.txt';
 
 sub check_track
 {
-Debug::trace_out "*** check_track($_[0])";
+	Debug::trace_out("*** DeliverTrack::check_track($_[0])");
 
 # Parameters/info
 #
@@ -39,12 +39,12 @@ Debug::trace_out "*** check_track($_[0])";
 
 	if(! -e $_[0])
 	{
-		Debug::error_out "[DeliverTrack::check_track] Track \"$_[0]\" not found.";
+		Debug::error_out("[DeliverTrack::check_track] Track \"$_[0]\" not found.");
 		return 0;
 	}
 	if(! -f $_[0])
 	{
-		Debug::error_out "[DeliverTrack::check_track] Track \"$_[0]\" is not a file.";
+		Debug::error_out("[DeliverTrack::check_track] Track \"$_[0]\" is not a file.");
 		return 0;
 	}
 
@@ -54,7 +54,8 @@ Debug::trace_out "*** check_track($_[0])";
 
 sub now_play_from_operation
 {
-Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
+	Debug::trace_out("*** DeliverTrack::now_play_from_operation(\"".$_[0]."\",$_[1],$_[2])");
+#
 # Parameters/info
 #
 # $_[0]: Output this track for playing, then end.
@@ -76,23 +77,26 @@ Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
                 DataMoving::set_rkey('now-playing',$_[1]);
         }
 
-        Playlog::private_playlog_out($_[0]);
-        if($_[2]==0)
-        {
-                if($_[1] eq '')
+	if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+	{
+		my %t=DataMoving::get_metadata(main::md5_hex($_[0]));
+		print "$_[0];$t{'l'}\n";
+	}else{
+                Playlog::private_playlog_out($_[0]);
+                if($_[2]==0)
                 {
-                        Playlog::public_playlog_out(basename($_[0]));
+                        if($_[1] eq '')
+                        {
+	                	Playlog::public_playlog_out(basename($_[0]));
+                	}else{
+        	        	Playlog::public_playlog_out($_[1]);
+                        }
                 }
-                else
-                {
-                        Playlog::public_playlog_out($_[1]);
-                }
-        }
+        	print "$_[0]\n";
+	}
 
-        print "$_[0]\n";
-
-# This will only do anything if someone called
-# BannerUpdate::set_doUpdate_flag()
+	# This will only do anything if someone called
+	# BannerUpdate::set_doUpdate_flag()
         BannerUpdate::set_timeslot_info($main::current_timeslot,$main::next_timeslot);
         BannerUpdate::schedule_flip();
 
@@ -102,8 +106,8 @@ Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
 
 sub now_play
 {
-Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
-
+	Debug::trace_out("*** DeliverTrack::now_play(\"".$_[0]."\",$_[1],$_[2])");
+#
 # Parameters/info
 #
 # $_[0]: Output this track for playing, then end.
@@ -135,23 +139,26 @@ Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
 		DataMoving::set_rkey('now-playing',$_[1]);
 	}
 
-	Playlog::private_playlog_out($_[0]);
-	if($_[2]==0)
-	{
-		if($_[1] eq '')
-		{
-			Playlog::public_playlog_out(basename($_[0]));
-		}
-		else
-		{
-			Playlog::public_playlog_out($_[1]);
-		}
-	}
+        if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+        {
+                my %t=DataMoving::get_metadata(main::md5_hex($_[0]));
+                print "$_[0];$t{'l'}\n";
+        }else{
+	        Playlog::private_playlog_out($_[0]);
+	        if($_[2]==0)
+        	{
+	                if($_[1] eq '')
+                	{
+                       		Playlog::public_playlog_out(basename($_[0]));
+	               	}else{ 
+        	       	        Playlog::public_playlog_out($_[1]);
+        		}
+	        }
+                print "$_[0]\n";
+        }
 
-	print "$_[0]\n";
-
-# This will only do anything if someone called
-# BannerUpdate::set_doUpdate_flag()
+	# This will only do anything if someone called
+	# BannerUpdate::set_doUpdate_flag()
 	BannerUpdate::set_timeslot_info($main::current_timeslot,$main::next_timeslot);
 	BannerUpdate::schedule_flip();
 
@@ -161,7 +168,7 @@ Debug::trace_out "*** now_play(\"".$_[0]."\",$_[1],$_[2])";
 
 sub technical_difficulties
 {
-Debug::trace_out "*** technical_difficulties()";
+	Debug::trace_out("*** DeliverTrack::technical_difficulties()");
 	if($Conf::conf{'track_td'} eq '')
 	{
 		Concurrency::fail('[DeliverTrack::technical_difficulties] CONF_track_td not defined',1);
@@ -183,6 +190,7 @@ Debug::trace_out "*** technical_difficulties()";
 
 	Concurrency::succeed(); # ironic
 } 
+
 
 1;
 

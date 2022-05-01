@@ -42,6 +42,10 @@ sub entering_new_day
 # Note: Schedule directory is not established at the time this event might be
 # called!
 
+        if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+        {
+                print "[== New Day ==] ";
+        }
 	Playlog::private_playlog_out('== New Day ==');
 }
 
@@ -61,6 +65,10 @@ sub entering_new_dow
 # called!
 
 	my @weekday=('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday');
+        if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+        {
+        	print "[== It\'s ".$weekday[$_[1]]." ==] ";
+        }
         Playlog::private_playlog_out("== It\'s ".$weekday[$_[1]]." ==");
 }
 
@@ -75,6 +83,10 @@ sub entering_new_timeslot
 #
 # $_[0]: New timeslot
 
+        if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+        {
+                print "[== New Timeslot ==] ";
+        }
         Debug::debug_out('entering new timeslot');
         BannerUpdate::set_doUpdate_flag();
         DataMoving::set_rkey('need-a-flip','');
@@ -93,6 +105,12 @@ sub entering_intermission
         Debug::debug_out('entering new timeslot');
         BannerUpdate::set_doUpdate_flag();
         DataMoving::set_rkey('need-a-flip','');
+
+
+        if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+        {
+                print "[== Entering Intermission ==] ";
+        }
 	Playlog::private_playlog_out('== Entering Intermission ==');
 	Playlog::public_playlog_out('(Now in intermission)');
 }
@@ -106,6 +124,10 @@ sub leaving_intermission
 #
 # Called when leaving intermission
 
+	if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+	{
+		print "[== Leaving Intermission ==] ";
+	}
 	Playlog::private_playlog_out('== Leaving Intermission ==');
 	Playlog::public_playlog_out('(Back to program)');
 }
@@ -127,10 +149,18 @@ sub timeslot_zone
 
 	if($_[0]==1)
 	{
+	        if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+        	{
+                	print "[== Schedule Yellow Zone ==] ";
+	        }
 		Playlog::private_playlog_out('== Schedule Yellow Zone ==');
 	}
 	if($_[0]==2)
 	{
+                if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+                {
+                        print "[== Schedule Red Zone ==] ";
+                }
 		Playlog::private_playlog_out('== Schedule Red Zone ==');
 	}
 

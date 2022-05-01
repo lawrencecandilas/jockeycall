@@ -6,6 +6,7 @@ require 'Conf.pm';
 require 'Concurrency.pm';
 require 'DataMoving.pm';
 require 'DeliverTrack.pm';
+require 'ParamParse.pm';
 require 'Utility.pm';
 
 # Out of band queue management and processing
@@ -40,7 +41,7 @@ sub oob_pending_delete
 
 sub oob_process_if_applicable
 {
-	Debug::trace_out "*** oob_process_if_applicable";
+	Debug::trace_out "*** OOB::oob_process_if_applicable";
 	if($channel eq '')
 	{
 		Debug::error_out '$channel is null.';
@@ -102,7 +103,7 @@ sub oob_push
 
 sub interval_process
 {
-	Debug::trace_out("*** interval_process(\"$_[0]\")");
+	Debug::trace_out("*** OOB::interval_process(\"$_[0]\")");
 
 # Parameters/info
 #
@@ -128,48 +129,34 @@ sub interval_process
 	while(my $f=readdir($d))
 	{
 		Debug::debug_out "[OOB::interval_process] \"$in_interval_dir/$f\" ?";
-# Reject subdirs that don't start with 'p-'
+		# Reject subdirs that don't start with 'p-'
 		next if(substr($f,0,2) ne 'p-');
-# Reject files that aren't a directory
+		# Reject files that aren't a directory
 		next if(! -d "$in_interval_dir/$f");
 		Debug::debug_out "[OOB::interval_process] \"$in_interval_dir/$f\" added to interval_tracklist_dirs";
 		push @interval_tracklist_dirs,"$in_interval_dir/$f";
 	}
 	closedir $d;
 
-# If this interval subdirectory has no tracklist entries, we bail
-#
+	# If this interval subdirectory has no tracklist entries, we bail
+	#
 	if(scalar(@interval_tracklist_dirs)==0)
 	{
 		Debug::debug_out "[OOB::interval_process] \"$in_interval_dir\" has nothing valid";
 		return 0;
 	};
 
-# Sort our tracklist directory list
+	# Sort our tracklist directory list
 	my @interval_tracklist_dirs_sorted=sort{$a cmp $b} @interval_tracklist_dirs;
 
-# Process tracklist directory
-	Debug::trace_out "    processing each tracklist ...";
+	# Process tracklist directory
+	Debug::trace_out("    processing each tracklist ...");
 
 	foreach my $tls(@interval_tracklist_dirs_sorted)
 	{
 		# parse directory name.
-		Debug::trace_out "    tracklist \"$tls\" ...";
-		my $tls_param_ordered=0;
-		my $tls_param_length=-1;
-		my $tls_param_eachonce=0;
-		my @tls_params=split /-/,$tls;
-		if($tls_params[2] eq 'ordered'){$tls_param_ordered=1;}
-		if($tls_params[2] eq 'random'){$tls_param_ordered=0;}
-		if($tls_params[3] eq 'all')
-		{
-			$tls_param_length=-1;
-		}
-		else
-		{
-			$tls_param_length=$tls_params[3];
-    		}
-		if($tls_params[4] eq 'eachonce'){$tls_param_eachonce=1;}
+		Debug::trace_out("    tracklist \"$tls\" ...");
+		my %tls_params=ParamParse::periodic_portion_subdir_params($tls);
 	
 		# prepare to get list of tracks contained within this
 		# subdirectory.
@@ -179,17 +166,16 @@ sub interval_process
 		opendir my $t2,"$tls";
 		while(my $f=readdir($t2))
 		{
-			Debug::trace_out("    --- --- $f ?");
-# Reject . and ..
+			# Reject . and ..
 			next if($f eq '.'); next if($f eq '..');
-# Reject directories
+			# Reject directories
 			next if (-d "$tls/$f");
 			Debug::trace_out("    --- --- $f might add to OOB queue");
 			push @this_tracklist,"$f";
 		}
 		closedir $t2;
 
-# That's it for this subdirectory if no valid tracks
+		# That's it for this subdirectory if no valid tracks
 		if(scalar(@this_tracklist)==0)
 		{
 			Debug::debug_out("    --- --- tracklist has nothing valid");
@@ -197,32 +183,32 @@ sub interval_process
 		}
 	
 		my $limit=1;
-		if($tls_param_length==-1)
+		if($tls_params{'limit'}==-1)
 		{
 			$limit=scalar(@this_tracklist);
 		}
 		else
 		{
-			$limit=$tls_param_length;
+			$limit=$tls_params{'limit'};
 		}
 	
 		@this_tracklist_1=();
 	
-# ------- random
-		if($tls_param_ordered==0)
+		# ------- random
+		if($tls_params{'ordered'}==0)
 		{
 			Debug::trace_out "    interval_process(): random";
 			@this_tracklist_1=shuffle @this_tracklist;
 		}
 
-# ------- ordered
-		if($tls_param_ordered==1)
+		# ------- ordered
+		if($tls_params{'ordered'}==1)
 		{
 			Debug::trace_out "    interval_process(): ordered";
 			@this_tracklist_1=sort{$a cmp $b} @this_tracklist;
 		}
 
-# ------- all
+		# ------- all
 		foreach my $t3(@this_tracklist_1)
 		{
 			oob_push("$tls/$t3");
@@ -236,7 +222,7 @@ sub interval_process
 
 sub periodic_process
 {
-	Debug::trace_out("*** periodic_process(\"$_[0]\",$_[1],$_[2])");
+	Debug::trace_out("*** OOB::periodic_process(\"$_[0]\",$_[1],$_[2])");
 	my $in_last_datestring=$_[1];
 	my $in_datestring=$_[2];
 
@@ -260,101 +246,142 @@ sub periodic_process
 	Debug::debug_out('[OOB::periodic_process] Looking at intervals for periodics');
 	my @periodics=();
 	 
-	if(! -e "$_[0]"){return 1;}
+	if(! -e "$_[0]")
+	{
+		Debug::error_out("[OOB::periodic_process] periodic subdirectory \"$_[0]\" doesn't exist or is inaccessible");
+		return 0;
+	}
  
-# let's get a list of subdirs in $_[0].
+	# let's get a list of subdirs in $_[0].
 	my @subdirs=();
-	my @rrsubdirs=();
+
 	if(!opendir my $d,"$_[0]")
 	{
-		Debug::error_out("[OOB::periodic_process] could not open \"$_[0]\"");
+		Debug::error_out("[OOB::periodic_process] opendir returned error on periodic subdirectory \"$_[0]\"");
+		return 0;
 	}
 	else
 	{
 		while(my $f=readdir($d))
 		{
-# ... must be a directory
-			next if(! -d "$_[0]/$f");
+			# filter . and ..
+			next if(($f eq '.')or($f eq '..'));
+			# ... must be a directory
+			if(! -d "$_[0]/$f")
+			{
+				Debug::error_out("[OOB::periodic_process] \"$_[0]\" is not a directory, ignoring");
+				next;
+			}
+			Debug::trace_out("    found periodic portion subdirectory \"$_[0]/$f\"");
     			push @subdirs,$f;
 		}
 	closedir $d;
 	}
 	
-	my $rr;
-# see if this periodic has any round-robins
+	my @rrsubdirs=(); my $rr;
+	# see if this periodic has a round-robin directory defined
 	if(-e "$_[0]/rr")
 	{
-# increment and get round-robin counters for this interval
-        my $rr=DataMoving::get_key("interval-$interval-rr",0);
-        $rr=$rr+1; if($rr>4){$rr=1;}
-        DataMoving::set_key("interval-$interval-rr",0);
-# let's get a list of round-robin subdirs in $_[0]/rr.
+		Debug::trace_out("Found round-robin subdirectory $_[0]/rr for this periodic");
+		# let's get a list of round-robin subdirs in $_[0]/rr.
 		if(!opendir my $d,"$_[0]/rr")
 		{
-			Debug::error_out("[OOB::periodic_process] could not open \"$_[0]\"");
+			Debug::error_out("[OOB::periodic_process] opendir returned error on periodic portion subdirectory \"$_[0]\", skipping");
 		}
 		else
 		{
 			while(my $f=readdir($d))
 			{
-# ... must be a directory
-				next if(! -d "$_[0]/$f");
-				push @subdirs,$f;
+				# filter . and ..
+				next if(($f eq '.')or($f eq '..'));
+				# ... must be a directory
+				if(! -d "$_[0]/$f")
+				{
+					Debug::error_out("[OOB::periodic_process] \"$_[0]\" is not a directory, ignoring");
+					next;
+				}
+				Debug::trace_out("    found periodic round-robin subdirectory \"$_[0]/$f\"");
+				push @rrsubdirs,$f;
 			}
 			closedir $d;
 		}
 	}
 
-# for each supported interval, see if we're in it.
-# TODO: Introduce some tolerance.
+	# for each supported interval, see if we're in it.
+	# TODO: Introduce some tolerance.
 	#print "last, current: $in_last_datestring, $in_datestring\n";
 	foreach my $interval((2,3,5,6,10,12,15,20,30,40,60,120,240,480,720))
 	{
-		Debug::trace_out "interval $interval";
+		Debug::trace_out("    [trivial] interval $interval");
 		my $t1=int((Utility::datestring_to_minutes($in_last_datestring)-3)/$interval);
 		my $t2=int((Utility::datestring_to_minutes($in_datestring)-3)/$interval);
-  
+
+		# increment and get round-robin counters for this interval 
+		$rr=DataMoving::get_rkey("interval-rr-counter-$interval",0)+1;
+		if($rr>$Conf::conf{'max_rr_slots'})
+		{
+			$rr=1;
+		}
+ 
 		if(($t2-$t1)==1)
 		{
 			Debug::debug_out("[OOB::periodic_process] new $interval minute mark - scanning for periodics");
 
-# force a banner flip every 20 mins
-#
-# Sets a key as a signal to main, that main needs to check.
-#
-# This is needed because it looks like this routine can be called before
-# main tells BannerUpdate the current and next timeslot.  It might be a bug.
-#
-# So main will check this variable and handle that when convenient for it.
-#
+			# force a banner flip every 20 mins
+			#
+			# Sets a key as a signal to main, that main needs to
+			# check.
+			#
+			# This is needed because it looks like this routine
+			# can be called before main tells BannerUpdate the
+			# current and next timeslot.
+			#
+			# It might be a bug.
+			#
+			# So main will check this variable and handle that
+			# when convenient for it.
+			#
 			if($interval==20)
 			{
-				Debug::debug_out('setting need-a-flip flag');
+				Debug::debug_out
+					('    forcing a banner flip at the 20 minute mark, setting need-a-flip');
 				DataMoving::set_rkey('need-a-flip',1);
 			}
 
+			# See if periodic directory has any interval dirs
+			# that match the current interval
 			foreach my $subdir(@subdirs)
 			{
-	 			##Debug::debug_out "$subdir = $_[0]/$interval? ";	
 				if($subdir eq "$interval")
 				{
-					##Debug::debug_out "Found periodic $_[0]/$interval";
-					##print "Found periodic $_[0]/$interval\n";
-					push @periodics,"$_[0]/$interval";
+					Debug::trace_out
+						("    Found periodic $_[0]/$subdir");
+					push @periodics,"$_[0]/$subdir";
 				}
 			} # foreach my $subdir( ...
 
+			# See if round-robin periodic directory has any 
+			# interval dirs that match the current interval
 			if($rr!=0){
 				foreach my $rrsubdir(@rrsubdirs)
 				{
-					if($subdir eq "$rr")
+					if(index($rrsubdir,"$interval-$rr",0)!=-1)
 					{
-						##Debug::debug_out "Found periodic $_[0]/$interval/$rr";
-						##print "Found periodic $_[0]/$interval/$rr\n";
-						push @periodics,"$_[0]/$interval/$rr";
+						Debug::trace_out	
+							("Found round-robin \"$_[0]/$rrsubdir\"");
+						push @periodics,"$_[0]/rr/$rrsubdir";
+						if(index($rrsubdir,'-end',-4)!=-1)
+						{
+							Debug::trace_out
+								('end parameter specified, resetting round-robin counter for this interval');
+							$rr=1;
+						}
+					last;
 					}
      			 	} # foreach my $rrsubdir( ... 
  			}
+
+		DataMoving::set_rkey("interval-rr-counter-$interval",$rr);
 
 		} # if(($t2-$t1)==1) ...
     
@@ -374,10 +401,11 @@ sub periodic_process
 	}
 	else
 	{
-		Debug::debug_out('no periodic interval subdirectories to process');
+		Debug::debug_out('[OOB::periodic_process] no periodic interval subdirectories to process');
 	}
 
 	return $FLAG_added_a_periodic;
 }
+
 
 1;

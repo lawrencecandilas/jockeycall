@@ -10,9 +10,12 @@ use Digest::MD5 qw(md5 md5_hex md5_base64);
 use File::Basename;
 use File::Copy;
 use List::Util qw/shuffle/;
+use Time::Piece;
+use Time::Seconds;
 
 use lib '../lib/jockeycall-modules';
 use Utility;
+use ParamParse;
 use Debug;
 use Conf;
 use Concurrency;
@@ -31,7 +34,7 @@ use MetadataProcess;
 #
 my $command=$ARGV[0]; $command=~s/^\s+|\s+$//g;
 
-# The subcommands may take parameters.  Where the parameters are depends
+# The subcommands may take '}parameters.  Where the parameters are depends
 # on some logic below ...
 my $parameter;
 
@@ -39,13 +42,13 @@ my $parameter;
 # given directory. 
 #
 # $ENV{'JOCKEYCALL_CHANNEL'} is that directory, unless the subcommand is
-# "transmit" - then it's $ARGV[1]
+# "transmit" or "test" - then it's $ARGV[1]
 # 
 # Why is an environment variable used?  ezstream wackiness. 
 #
 my $channel;
 my @parameter;
-if($ARGV[0] eq 'transmit')
+if(($ARGV[0] eq 'transmit')||($ARGV[0] eq 'test'))
 {
 	if($ARGV[1] eq ""){Utility::usage; exit 0;}
 	if(! -e "$ARGV[1]"){die "channel directory \"$ARGV[1]\" not found.";}
@@ -53,7 +56,7 @@ if($ARGV[0] eq 'transmit')
 	$channel=basename($ARGV[1]);
 	$ENV{'JOCKEYCALL_CHANNEL'}=$ARGV[1];
 	# Any parameters to "transmit" subcommand will be after the channel
-	# directory.
+	# directory, and "test" doesn't take any parameters yet.
 	$parameter[0]=$ARGV[2];
 	$parameter[1]=$ARGV[3];
 	$parameter[2]=$ARGV[4];
@@ -91,21 +94,25 @@ if(index($0,'ezstream-metadata-call')!=-1)
 	$parameter=$ARGV[0];
 }
 
+
+# Read the configuration, bail if we don't have a valid one.
 Conf::read_jockeycallconf(basename($0));
 if($Conf::conf{'valid'}!=1){exit 1;}
 Conf::read_conf($ENV{'JOCKEYCALL_CHANNEL'}."/config");
 if($Conf::conf{'valid'}!=1){exit 1;}
 
-# Make DataMoving do any setup it needs.
-# If DataMoving is the SQLite implementation then at this point it opens (and
-# creates if needed) the database.
+
+# Allow DataMoving to complete any needed setup.
+# For SQLite implementation, this is creating/opening the databases.
 DataMoving::setup;
+
 
 # Debug messaging setup
 if($ENV{'JOCKEYCALL_STDOUT_EVERYTHING'} eq '1'){Debug::stdout_all_the_things;}
 Debug::debug_message_management(1,$Conf::conf{'basedir'}.'/'.$Conf::conf{'logs_at'},$channel);
 
 Debug::debug_out "=== New Call [$channel $command] [$Conf::conf{'0'}] ===";
+
 
 # If no command was specified earlier, notify user one is needed.
 if($command eq '')
@@ -114,6 +121,7 @@ if($command eq '')
 	"channel $channel, path $ENV{'JOCKEYCALL_CHANNEL'}, caller $0\nYep, that's a valid channel with no configuration errors.\nSpecify a subcommand if you want me to do something.",2
 	);
 }
+
 
 # Add Events module
 use Events;
@@ -127,36 +135,36 @@ use Events;
 my $inm=$Conf::conf{'basedir'}.'/'.$Conf::conf{'intermission_at'};
 Events::set_inm($inm); # ::Events
 
+
 # Tell Playlog module where to write play log files.
 Playlog::set_private_playlog_file($Conf::conf{'basedir'}.'/'.$Conf::conf{'logs_at'}.'/private-playlog-'.$channel.'-'.$Debug::timestamp.'.txt');
 Playlog::set_public_playlog_file($Conf::conf{'basedir'}.'/'.$Conf::conf{'logs_at'}.'/public-playlog-'.$channel.'-'.$Debug::timestamp.'.txt');
 
+
 # Prepare lock code (or fail)
+# Actual lock is acquired later.
 $Concurrency::concurrency_lock_code=qx\cat "/proc/sys/kernel/random/uuid"\;
 chomp($Concurrency::concurrency_lock_code);
 if(($?!='0')or($Concurrency::concurrency_lock_code eq '')){Concurrency::fail "lock code generation failed, error code $?";}
 Debug::debug_out "lock code is $Concurrency::concurrency_lock_code";
 
-# TESTMODE, if enabled, will report in compact form what track is selected
-# and also allow datestring to be specified in command line.
-my $TESTMODE=0;
-my $TESTMODE_datestring;
 
 # Tell BannerUpdate module where our channel lives so it can get banners and
 # channel information.
 use BannerUpdate;
 BannerUpdate::set_channel($channel,$Conf::conf{'basedir'});
 
+
+# Set this now.  Must be set from main.
+# The `transmit` subcommand relies on this; and this allows us to write an
+# ezstream XML file without specifying the full path of jockeycall there.
+$Conf::conf{'mypath'}=dirname(__FILE__);
+
 # Take care of any subcommands other than 'next'.
 # Subcomannds can acquire lock if needed.
 use HTMLSchedule;
 use Subcommands;
 Subcommands::process_subcommand_other_than_next($channel,$command,$parameter[0],$parameter[1],$parameter[2]);
-
-
-# Secret option - presence of this parameter allows forcing a banner update
-# manually from the command line.
-#if(){BannerUpdate::set_doUpdate_flag();}
 
 
 # Looking like we might actually do something productive.
@@ -172,25 +180,34 @@ OOB::set_channel($channel);
 # No return from this point if there is something in the OOB queue.
 OOB::oob_process_if_applicable();
 
-
 # Prepare Operation module
 use Operation;
 Operation::set_channel($channel);
 
+# We can tell Random the channel random directory now, if defined in the
+# configuration.
+use Random;
+Random::set_channel_dir($Conf::conf{'basedir'}.'/'.$Conf::conf{'random_at'});
+
 
 # Figure out current datestring.
 my $datestring;
-if($TESTMODE==1)
-# TESTMODE=1 means we get that from the command line.
+if(($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)&&($ENV{'JOCKEYCALL_TIMESLOT'} ne ''))
 {
-	$datestring=$TESTMODE_datestring;
-	debug_out "Test mode enabled - $TESTMODE_datestring"
+	$datestring=$ENV{'JOCKEYCALL_TIMESLOT'};
+	debug_out('JOCKEYCALL_SIMULATION_MODE enabled - using datestring from JOCKEYCALL_TIMESLOT if valid');
+	if(!(Utility::check_datestring($ENV{'JOCKEYCALL_TIMESLOT'})))
+	{
+		Concurrency::fail('well JOCKEYCALL_TIMESLOT was not a valid datestring');
+	}
+	$datestring=$ENV{'JOCKEYCALL_TIMESLOT'};
+	$Debug::timestamp_hms="SIM-$datestring";
 }
 else
 {
-# Otherwise it's derived from localtime.
 	$datestring=strftime "1%H%M", localtime;
 }
+
 
 # Fetch datestring of previous call.
 # Need to use root key (*_rkey() calls) until we determine a schedule
@@ -202,7 +219,24 @@ Debug::debug_out "current datestring $datestring, last_datestring $last_datestri
 
 # --- New day check.
 # Get current day number and day number of previous call.
-my @times=localtime; my $currentday=$times[7];
+my $currentday;
+my $currentdow;
+if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+{
+	# increment localtime by $ENV{'JOCKEYCALL_DAY_OFFSET'} if we are
+	# simluating.
+	my $now=localtime;
+	my $future=$now + ($ENV{'JOCKEYCALL_DAY_OFFSET'} * ONE_DAY);
+	$currentdow=$future->_wday;
+	$currentday=$future->yday;
+}
+else
+{
+	my @times=localtime;
+	$currentdow=$times[6];
+	$currentday=$times[7];
+}
+
 my $lastday=DataMoving::get_rkey('last-day',0);
 DataMoving::set_rkey('last-day',$currentday);
 
@@ -213,8 +247,8 @@ if($lastday!=$currentday)
 }
 
 # --- New DOW (day-of-the-week) check.
-# Get current DOW number and DOW number of previous call.
-my $currentdow=$times[6];
+# We already got the current DOW number earlier
+# We need the DOW number of the previous call
 my $lastdow=DataMoving::get_rkey('last-day-of-week',$currentdow);
 DataMoving::set_rkey('last-day-of-week',$currentdow);
 
@@ -238,6 +272,7 @@ if($datestring>$Conf::conf{'flip_day_at'})
 # Point ourselves to the correct schedule directories.
 if(!Conf::setdirs($currentdow))
  {DeliverTrack::technical_difficulties; Concurrency::succeed;exit 0;}
+# NOTE:
 # DataMoving::setup_timeslot_vars called after we confirm the timeslot.
 
 # Check for any channel-level periodics; if any, they will add to OOB queue.  
@@ -283,7 +318,7 @@ my @schedule_sorted=sort{$a<=>$b} @schedule;
 # Find which timeslot is equal or greater than current time.
 # This determines which timeslot we currently should be selecting tracks
 # from.
-Debug::debug_out "scanning directories in $scd for appropriate timeslot";
+Debug::debug_out("scanning directories in $scd for appropriate timeslot");
 
 # Set $current_timeslot to latest timeslot (-1 = end of array).
 $current_timeslot=$schedule_sorted[-1];
@@ -406,22 +441,12 @@ if(DataMoving::get_key('timeslot-event-counter','') eq 2)
 # appear in the timeslot-dir-history list.
 
 my @timeslot_dir_history=();
-if($FLAG_new_timeslot==1)
-{
-	@timeslot_dir_history=DataMoving::new_list('timeslot-dir-history');
-	DataMoving::set_key('timeslot-event-counter','');
-	Debug::debug_out "reset timeslot-dir-history";
-}
 
 my @current_timeslot_dirs;
 my @current_timeslot_dirs_sorted;
 my @timeslot_history;
 my $tsd;
-my $tsd_param_ordered;
-my $tsd_param_cycle;
-my $tsd_param_newhistory;
-my $tsd_param_limit;
-my @tsd_params;
+my %tsd_params;
 my $rdm;
 my $flag_dup;
 my @t; 
@@ -437,35 +462,35 @@ my $chosen_track;
 
 ANOTHER_TIMESLOT_DIR:
 
-@timeslot_dir_history=DataMoving::read_list('timeslot-dir-history');
-Debug::debug_out scalar(@timeslot_dir_history)." items in timeslot-dir-history";
-
-@current_timeslot_dirs=();
 # Current timeslot directory
 $tsd="$Conf::conf{'SCD'}/$current_timeslot";
-# and tell BannerUpdate that too
-BannerUpdate::set_timeslot($tsd);
-
-# Check if something from a previous call wanted the banners to be flipped.
-if(DataMoving::get_rkey('need-a-flip',0) eq '1')
-{
-	BannerUpdate::set_doUpdate_flag();
-	DataMoving::set_rkey('need-a-flip','');
-}
 
 # Define random directory, based on current timeslot, as well.
 $rdm=$tsd.'/random';
 
+# tell BannerUpdate the current timeslot directory
+BannerUpdate::set_timeslot($tsd);
+# Check if something from a previous call wanted the banners to be flipped.
+if(DataMoving::get_rkey('need-a-flip',0) eq '1')
+{
+        BannerUpdate::set_doUpdate_flag();
+        DataMoving::set_rkey('need-a-flip','');
+}
+
+@timeslot_dir_history=DataMoving::read_list('timeslot-dir-history');
+Debug::debug_out scalar(@timeslot_dir_history).' items in timeslot-dir-history';
+
+@current_timeslot_dirs=();
 DataMoving::read_timeslot_dir($tsd,\@current_timeslot_dirs,\@timeslot_dir_history);
 
 # Are all timeslot directories in history?
 # This means we played through all of them.  So, time for intermission
 # then.
-
 if(scalar(@current_timeslot_dirs)==0)
 {
+#TODO:
 #	I don't think this is needed, if nothing bad happens, remove it
-	DataMoving::append_to_list('timeslot-dir-history',$tsd);
+#	DataMoving::append_to_list('timeslot-dir-history',$tsd);
 	Debug::debug_out "timeslot had no valid dirs, going to intermission";
 	goto INTERMISSION;
 }
@@ -475,30 +500,17 @@ if(scalar(@current_timeslot_dirs)==0)
 $tsd=$current_timeslot_dirs_sorted[0];
 Debug::trace_out "tsd is $tsd";
 
-# Extract parameters of timeslot (part of timeslot directory name)\
-$tsd_param_ordered=0;
-$tsd_param_cycle=0;
-$tsd_param_newhistory=0;
-$tsd_param_limit=99999;
-@tsd_params=split /-/,$tsd;
-# TODO: Handle this better.  Splitting $tsd on a dash could result in
-# 2,3,4 not containing the expected parameters, if any directories have
-# a dash in them.
-if($tsd_params[2] eq 'ordered'){$tsd_param_ordered=1}
-if($tsd_params[2] eq 'random'){$tsd_param_ordered=0}
-if($tsd_params[3] eq 'cycle'){$tsd_param_cycle=1}
-if($tsd_params[3] eq 'once'){$tsd_param_cycle=0}
-if($tsd_params[4] eq 'newhistory'){$tsd_param_newhistory=1}
-if($tsd_params[4] eq 'samehistory'){$tsd_param_newhistory=0}
-if($tsd_params[5] ne ''){$tsd_param_limit=$tsd_params[5]};
-if($tsd_param_limit eq 0){$tsd_param_limit=99999;}
-Debug::trace_out " parameters: ordered=$tsd_param_ordered, cycle=$tsd_param_cycle, newhistory=$tsd_param_newhistory, limit=$tsd_param_limit";
+# Extract parameters of timeslot (part of timeslot directory name)
+# Unspecified parameters take defaults, see ParamParse::timeslot_portion_subdir_params();
+%tsd_params=ParamParse::timeslot_portion_subdir_params($tsd); 
+Debug::trace_out " parameters: ordered=$tsd_params{'ordered'}, cycle=$tsd_params{'cycle'}, newhistory=$tsd_params{'newhistory'}, limit=$tsd_params{'limit'}";
 
 # Restart history if desired
-if(($FLAG_new_timeslot==1)and($tsd_param_newhistory==1))
+if(($FLAG_new_timeslot==1)and($tsd_params{'newhistory'}==1))
 {
 	Debug::debug_out 'Starting new history';
-	@timeslot_history=DataMoving::new_list('history');
+	DataMoving::new_list('history');
+	@timeslot_history=();
 }
 else
 {
@@ -508,7 +520,7 @@ else
 debug_out 'history has '.(scalar(@timeslot_history)).' entry(ies)';
 
 # If we've played the limit number of tracks, we're done
-if(scalar(@timeslot_history)>=$tsd_param_limit)
+if(scalar(@timeslot_history)>=$tsd_params{'limit'})
 {
 	Debug::debug_out 'At limit number of tracks';
 	DataMoving::append_to_list('timeslot-dir-history',$tsd);
@@ -546,7 +558,7 @@ if((scalar(@t)==0)and($flag_dup==0))
 }
 if((scalar(@t)==0)and($flag_dup!=0))
 {
-	if($tsd_param_cycle==0)
+	if($tsd_params{'cycle'}==0)
 	{
 		# if the option is "once" (not "cycle") ...
 		# close out this timeslot dir by adding it to history, then circling
@@ -559,8 +571,9 @@ if((scalar(@t)==0)and($flag_dup!=0))
 	{
   		# if the option is "cycle" (not "once") ...
 		# clear history and try again.
-		@timeslot_history=DataMoving::new_list('history');
-			goto TRY_AGAIN;
+		@timeslot_history=();
+		DataMoving::new_list('history');
+		goto TRY_AGAIN;
 	}
 }
 
@@ -575,6 +588,45 @@ OOB::oob_process_if_applicable();
 # Any possible information the operation may need about the timeslot should be
 # available.
 Operation::process_any_active();
+
+# We now know the timeslot directory for sure, so we can let Random know that
+# if one exists for the channel.
+if(-e "$rdm")
+{
+	Debug::debug_out('timeslot has a random directory, telling Random module');
+	Random::set_timeslot_dir("$rdm")
+};
+my $random_spin=int(rand(100));
+Debug::debug_out("Dice roll for random is $random_spin out of 100, random_percent is $Conf::conf{'random_percent'}");
+if($random_spin<=$Conf::conf{'random_percent'})
+{
+	Debug::debug_out('Hit for random, selecting and playing random track');
+	my $t=Random::get_random_track(\@timeslot_history,($difference+$close_to_edge_adjustment),$timeslot_zone);
+	if($t ne '')
+	{
+		# Add random track to history
+		my $th=md5_hex($t);
+		DataMoving::append_to_list('history',$th);
+		# Update play count
+		my %t2=DataMoving::get_metadata($th);
+		if(%t2!=undef)
+		{
+			$t2{'c'}++;
+			DataMoving::set_metadata($th,\%t2);
+		}
+		# Deliver it
+		if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+		{
+			print "[== Random ==] ";
+		}
+		DeliverTrack::now_play($t,'',0);
+		# If something goes wrong with delivery we'll just fall through I guess
+	}else{
+		Debug::debug_out('Random::get_random_track could not select a track');
+		Debug::debug_out('Proceeding with normal flow');
+	}
+}
+
 
 # set the mode to normal - handle intermission-normal transition here
 $last_mode='unknown';
@@ -596,10 +648,11 @@ if($current_mode ne 'normal')
 	}
 }
 
-if($tsd_param_ordered!=1)
+if($tsd_params{'ordered'}!=1)
 {
 	# Sort @z references in order of @c (play count).
 	# Least played tracks will start at 1.
+	Debug::trace_out('timeslot portion is unordered, sorting by play count');
 	my $size=(@z)+1; my $min=0;
 	for(my $i=1;$i<$size;$i=$i+1){
 	 for(my $j=$i+1;$j<$size;$j=$j+1){
@@ -608,10 +661,11 @@ if($tsd_param_ordered!=1)
 	   } } }
 }
 
-if($tsd_param_ordered==1)
+if($tsd_params{'ordered'}==1)
 {
 	# Sort @z references in order of @t (track name).
 	# Earliest in alphabet will be 1.
+	Debug::trace_out('timeslot portion is ordered, sorting by track name');
 	my $size=(@z)+1; my $min=0;
 	for(my $i=1;$i<$size;$i=$i+1){
 	 for(my $j=$i+1;$j<$size;$j=$j+1){
@@ -620,12 +674,17 @@ if($tsd_param_ordered==1)
 	   } } }
 }
 
-Debug::trace_out "SORTED ===============================================================\n";
-for(my $i=1;$i<=scalar(@t);$i++){Debug::trace_out $c[$z[$i]]."\t\t".$t[$z[$i]]."\n";}
-Debug::trace_out "SORTED ===============================================================\n";
+
+Debug::trace_out "SORTED [timeslot tracks] =============================================\n";
+for(my $i=1;$i<=scalar(@t);$i++)
+{
+        Debug::trace_out('count: '.$c[$z[$i]].' track:'.$t[$z[$i]].' length:'.$l[$z[$i]]."\n");
+}
+Debug::trace_out "SORTED [timeslot tracks] =============================================\n";
+
 
 my $chosen_track;
-if($tsd_param_ordered!=1)
+if($tsd_params{'ordered'}!=1)
 {
 	my $max;
 	# Pick a track randomly.
@@ -643,20 +702,16 @@ if($tsd_param_ordered!=1)
 	$chosen_track=int(rand($max))+1;
 }
 
-if($tsd_param_ordered==1)
+if($tsd_params{'ordered'}==1)
 {
 	# Very simple
 	$chosen_track=1;
 }
 
-Debug::debug_out 'selected track '.$chosen_track.': '.$t[$z[$chosen_track]];
-
+Debug::debug_out('selected track '.$chosen_track.': '.$t[$z[$chosen_track]]);
 DataMoving::set_metadata($h[$z[$chosen_track]],{'c'=>($c[$z[$chosen_track]]+1),'l'=>$l[$z[$chosen_track]],'w'=>$w[$z[$chosen_track]]});
-
 DataMoving::append_to_list('history',$h[$z[$chosen_track]]);
-
 DeliverTrack::now_play("$tsd/$t[$z[$chosen_track]]",'',0);
-
 Concurrency::fail('DeliverTrack::now_play() returned for some reason.');
 exit 1;
 
@@ -682,7 +737,7 @@ if(OOB::periodic_process($intermission_periodics_dir,$last_datestring,$datestrin
 INTERMISSION_RETRY:
 # A history file is maintained for intermission slot,  Let's get it.
 @intermission_history=DataMoving::read_rlist('intermission-history');
-Debug::debug_out "intermission history has ".(scalar(@intermission_history))." entry(ies)";
+Debug::debug_out('intermission history has '.(scalar(@intermission_history)).' entry(ies)');
 
 # Now read all entries within intermission slot and gather candidiates
 # for selection.
@@ -698,21 +753,21 @@ Debug::debug_out "intermission history has ".(scalar(@intermission_history))." e
 
 @z=(); # order
 
-$flag_dup=DataMoving::get_candidate_tracks($inm,\@intermission_history,\@t,\@h,\@c,\@l,\@w,\@z,99999,0);
+$flag_dup=DataMoving::get_candidate_tracks($inm,\@intermission_history,\@t,\@h,\@c,\@l,\@w,\@z,99999,-1);
 
-Debug::debug_out "intermission slot \"$Conf::conf{'intermission_at'}\" has ".(scalar(@t))." candidate tracks.";
+Debug::debug_out("intermission slot \"$Conf::conf{'intermission_at'}\" has ".(scalar(@t)).' candidate tracks.');
 
 if(scalar(@t)==0)
 {
 	if($flag_dup==1)
 	{
-		Debug::debug_out "looks like we went through all intermission tracks, killing history and retrying ...";
+		Debug::debug_out('looks like we went through all intermission tracks, killing history and retrying ...');
 		DataMoving::new_rlist('intermission-history');
 		goto INTERMISSION_RETRY;
 	}
 	else
 	{
-		Debug::error_out "intermission slot is empty";
+		Debug::error_out('intermission slot is empty');
 		DeliverTrack::technical_difficulties();
 	}
 }
@@ -740,11 +795,51 @@ else
 	DataMoving::set_rkey('current-mode',$current_mode);
 }
 
+
+# Doing randoms from intermission as well.  Why not.
+if(-e "$inm/random")
+{
+        Debug::debug_out('intermission has a random directory, informing Random module');
+        Random::set_timeslot_dir("$inm/random")
+};
+my $random_spin=int(rand(100));
+Debug::debug_out("Dice roll for random is $random_spin out of 100, random_percent is $Conf::conf{'random_percent'}");
+if($random_spin<=$Conf::conf{'random_percent'})
+{
+        Debug::debug_out('Hit for random, selecting and playing random track');
+        my $t=Random::get_random_track(\@intermission_history,99999,-1);
+        if($t ne '')
+        {
+                # Add random track to history
+                my $th=md5_hex($t);
+                DataMoving::append_to_rlist('intermission-history',$th);
+                # Update play count
+                my %t2=DataMoving::get_metadata($th);
+                if(%t2!=undef)
+                {
+                        $t2{'c'}++;
+                        DataMoving::set_metadata($th,\%t2);
+                }
+                # Deliver it
+                if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
+                {
+                        print "[== Random ==] ";
+                }
+                DeliverTrack::now_play($t,'',0);
+                # If something goes wrong with delivery we'll just fall through I guess
+        }else{
+                Debug::debug_out('Random::get_random_track could not select a track');
+                Debug::debug_out('Proceeding with normal intermission track selection flow');
+        }
+}
+
+
 # Sort @z references in order of @c (play count).
 # Least played tracks will start at 1.
 my $size=(@z)+1;
 my $min=0;
 
+Debug::trace_out('intermission tracks always ordered by play count');
 for(my $i=1;$i<$size;$i=$i+1)
 {
 	for(my $j=$i+1;$j<$size;$j=$j+1){
@@ -756,12 +851,12 @@ for(my $i=1;$i<$size;$i=$i+1)
 	 }
 }
 
-Debug::trace_out "SORTED ===============================================================\n";
+Debug::trace_out('SORTED [intermission tracks] =========================================');
 for(my $i=1;$i<=scalar(@t);$i++)
 {
 	Debug::trace_out "count: ".$c[$z[$i]]." track:".$t[$z[$i]]." length:".$l[$z[$i]]."\n";
 }
-Debug::trace_out "SORTED ===============================================================\n";
+Debug::trace_out('SORTED [intermission tracks] =========================================');
 
 # Pick a track.
 # If there is more than one track ...
@@ -773,7 +868,7 @@ if(scalar(@t)>1)
 	# We might pick from all tracks or just the bottom half.
 	# (bottom half thing requires at least 3 tracks)
 	my $previous_track=DataMoving::get_rkey('intermission-last-played-track');
-	Debug::debug_out "previous intermission track: $previous_track";
+	Debug::debug_out("previous intermission track: $previous_track");
 	$distribution=int(rand(100));
 	if(($distribution>75)or(scalar(@t)<3))
 	{
@@ -802,14 +897,11 @@ else
 	$chosen_track=1;
 }
 
-Debug::debug_out 'selected intermission track '.$chosen_track.": $t[$z[$chosen_track]], $h[$z[$chosen_track]]";
-
+Debug::debug_out('selected intermission track '.$chosen_track.": $t[$z[$chosen_track]], $h[$z[$chosen_track]]");
 DataMoving::set_metadata($h[$z[$chosen_track]],{'c'=>($c[$z[$chosen_track]]+1),'l'=>$l[$z[$chosen_track]],'w'=>$w[$z[$chosen_track]]});
 DataMoving::append_to_rlist('intermission-history',$h[$z[$chosen_track]]);
 DataMoving::set_rkey('intermission-last-played-track',$h[$z[$chosen_track]]);
-
 DeliverTrack::now_play($inm.'/'.$t[$z[$chosen_track]],'INTERMISSION',1);
-
 Concurrency::fail("DeliverTrack::now_play() returned unexpectedly");
 
 exit 1;

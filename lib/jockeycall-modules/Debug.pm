@@ -32,6 +32,7 @@ our $debug_option_append=1;
 # (bflip log is also separate)
 our $debug_option_logdebug=1;
 our $debug_option_logtrace=1;
+our $debug_option_log_filter_trivial=1;
 our $debug_option_logerror=1;
 our $debug_option_logbflip=1;
 
@@ -51,6 +52,7 @@ our $debug_fhe; 		# File handle of error log
 our $debug_fhb;			# File handle of bflip log
 our $debug_enabled; 		# Internal flag
 
+sub trace_out;
 
 sub stdout_all_the_things
 {
@@ -65,6 +67,7 @@ sub stdout_all_the_things
 sub debug_out
 {
 	my $t=$_[0]; chomp $t;
+	return if(($debug_option_log_filter_trivial==1)and(index($t,'[trivial]')!=-1));
 
 	if(($debug_option_logdebug==1))
 	{
@@ -84,6 +87,7 @@ sub conf_error_out
 sub trace_out
 {
         my $t=$_[0]; chomp $t;
+	return if(($debug_option_log_filter_trivial==1)&&(index($t,'[trivial]')!=-1));
 
         if($debug_option_logtrace==1)
         {
@@ -111,8 +115,8 @@ sub error_out
 		if($debug_fhe){print $debug_fhe '[ERROR] ['.$timestamp_hms.'] '.$t."\n";}
 	}
 
-	# also write errors to trace log if enabled
-	trace_out "[ERROR]".$t;
+#	# also write errors to trace log if enabled
+#	trace_out('[ERROR] '.$t);
 }
 
 
@@ -191,11 +195,11 @@ sub debug_message_management
 		if(open($debug_fh,$option,$debug_log_basedir.'/'.$debug_log_file))
 		{
 			$debug_enabled=1;
-			trace_out "debug_message_management(): 1 - enable and setup - completed";
+			trace_out('    [trivial] [Debug::debug_message_management] 1 - enable and setup - completed');
 		}
 		else
 		{
-			print STDERR "debug_message_management(): unable to open $debug_log_basedir/$debug_log_file for writing\n";
+			print STDERR "[Debug::debug_message_management] unable to open $debug_log_basedir/$debug_log_file for writing\n";
 			$debug_log_file='';
 			$debug_option_logdebug=0;
 			$debug_option_logtrace=0;
@@ -204,7 +208,7 @@ sub debug_message_management
 # debug_error_file always receives errors regardless of what is enabled
 		if(!open($debug_fhe,'>>',$debug_log_basedir.'/'.$debug_error_file))
 		{
-   			print STDERR "debug_message_management(): unable to open $debug_log_basedir/$debug_error_file for writing\n";
+   			print STDERR "[Debug::debug_message_management] unable to open $debug_log_basedir/$debug_error_file for writing\n";
    			print STDERR "cannot log errors to debug_error_file\n";
 			$debug_error_file='';
 			$debug_option_logerror=0;
@@ -213,13 +217,14 @@ sub debug_message_management
 
 	if(($_[0]==2)and($debug_enabled==1))
 	{
-		trace_out "debug_message_management(): 2 - close down";
+		trace_out('    [trivial] [Debug::debug_message_management] 2 - close down');
 		close($debug_fh) if($debug_log_file ne '');
 		if($debug_error_file ne ''){close($debug_fhe);}
 		if($debug_bflip_file ne ''){close($debug_fhb);}
 	}
 
 }
+
 
 1;
 

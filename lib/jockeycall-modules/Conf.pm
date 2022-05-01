@@ -25,7 +25,9 @@ $possible_channel_conf_item{'metadata_db'}	='dbnameanddir-required';
 $possible_channel_conf_item{'schedules_at'}	='chandir-required';
 $possible_channel_conf_item{'intermission_at'}	='chandir-required';
 $possible_channel_conf_item{'logs_at'}		='chandir-required';
-$possible_channel_conf_item{'random_percent'}	='number-optional,range:1-100';
+$possible_channel_conf_item{'max_rr_slots'}	='number-optional,range:2-999';
+$possible_channel_conf_item{'random_at'}	='chandir-optional';
+$possible_channel_conf_item{'random_percent'}	='number-optional,range:0-100';
 $possible_channel_conf_item{'yellow_zone_mins'}	='number-optional,range:1-60';
 $possible_channel_conf_item{'red_zone_mins'}	='number-optional,range:1-60';
 # Hash that defines valid configuration options for global jockeycall.conf 
@@ -52,6 +54,11 @@ our %conf;
 # Validity flag.  If this is 0 after calling read routines, the configuration
 # couldn't be read or there was a problem, and main should abort.
 $conf{'valid'}=0;
+
+# Location where we are running from - specifically `main`.
+# `main` has to set this, not us.
+# Used by `transmit` subcommand.
+$conf{'mypath'}='.';
 
 # This is 1 if banners should be disabled.  This can be true if explicitly
 # specified by the config, or forced true if there is an error with banner
@@ -84,6 +91,10 @@ $conf{'subdir_hday_0604'}='normal/weekday';
 $conf{'subdir_hday_1124'}='normal/weekday';
 $conf{'subdir_hday_1225'}='normal/weekday';
 $conf{'subdir_hday_1231'}='normal/weekday';
+# Maximum number of periodic interval round-robin slots
+$conf{'max_rr_slots'}=16;
+# Default random directory for entire channel
+$conf{'random_at'}='';
 # Default random_percent
 $conf{'random_percent'}=97;
 # Default schedule zone threshoolds
@@ -269,6 +280,7 @@ sub validate_and_set_conf_line
 							{$dir_to_check=dirname($conf{'basedir'}.'/',$_[1]);}
 		if(!(-d $dir_to_check))
 		{
+			if($validator_need eq 'optional'){return 1;} # nonexistence doesn't matter if optional
 			if($validator_qualifier eq 'nobannersifbad')
 			{
 				$disable_banners=1;
