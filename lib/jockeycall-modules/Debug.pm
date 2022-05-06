@@ -31,7 +31,7 @@ our $debug_option_append=1;
 # (error log is separate)
 # (bflip log is also separate)
 our $debug_option_logdebug=1;
-our $debug_option_logtrace=1;
+our $debug_option_logtrace=0;
 our $debug_option_log_filter_trivial=1;
 our $debug_option_logerror=1;
 our $debug_option_logbflip=1;

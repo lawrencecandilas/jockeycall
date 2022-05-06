@@ -138,6 +138,8 @@ sub command_test
 	$in_start_datestring=$_[1];
 	$in_end_datestring=$_[2];
 
+	Concurrency::release_lock(1);
+
 	my $track_name;
 	my $track_playtime_seconds;
 	my $d=$in_start_datestring;

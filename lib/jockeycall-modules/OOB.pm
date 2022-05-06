@@ -248,7 +248,7 @@ sub periodic_process
 	 
 	if(! -e "$_[0]")
 	{
-		Debug::error_out("[OOB::periodic_process] periodic subdirectory \"$_[0]\" doesn't exist or is inaccessible");
+		Debug::trace_out("    periodic subdirectory \"$_[0]\" doesn't exist or is inaccessible");
 		return 0;
 	}
  

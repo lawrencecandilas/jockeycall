@@ -5,6 +5,7 @@
 #use strict;
 #use warnings; 
 
+# These are expected-to-be-present standard Perl modules.
 use POSIX qw(strftime);
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 use File::Basename;
@@ -13,6 +14,8 @@ use List::Util qw/shuffle/;
 use Time::Piece;
 use Time::Seconds;
 
+# Modules provided in ../lib/jockeycall-modules required to start.
+# Additional modules from this location pulled in as needed.
 use lib '../lib/jockeycall-modules';
 use Utility;
 use ParamParse;
@@ -24,7 +27,9 @@ use DataMoving;
 use DeliverTrack;
 use MetadataProcess;
 
-# $ARGV[0] is the subcommand - what we want to do.
+# Let's start by looking at the first command line parameter, $ARGV[0].
+#
+# And $ARGV[0] would be our "subcommand" - what we want to do.
 #
 # - Due to ezstream wackiness, the script name (${'0'}) is also kinda-sorta
 #   allowed to set the subcommand, that logic may override it.  See below.
@@ -34,17 +39,17 @@ use MetadataProcess;
 #
 my $command=$ARGV[0]; $command=~s/^\s+|\s+$//g;
 
-# The subcommands may take '}parameters.  Where the parameters are depends
+# The subcommands may take parameters.  Where the parameters are depends
 # on some logic below ...
 my $parameter;
 
-# It all begins with a channel.  All things that make up a channel are in a
-# given directory. 
+# A basic bit of info we need to start with this the channel path.
+# All things that make up a channel are in a given directory. 
 #
 # $ENV{'JOCKEYCALL_CHANNEL'} is that directory, unless the subcommand is
 # "transmit" or "test" - then it's $ARGV[1]
 # 
-# Why is an environment variable used?  ezstream wackiness. 
+# Why is an environment variable used?  Answer: ezstream wackiness. 
 #
 my $channel;
 my @parameter;
@@ -108,7 +113,11 @@ DataMoving::setup;
 
 
 # Debug messaging setup
-if($ENV{'JOCKEYCALL_STDOUT_EVERYTHING'} eq '1'){Debug::stdout_all_the_things;}
+if($ENV{'JOCKEYCALL_STDOUT_EVERYTHING'} eq '1')
+{
+	Debug::stdout_all_the_things;
+	Concurrency::release_lock(1);
+}
 Debug::debug_message_management(1,$Conf::conf{'basedir'}.'/'.$Conf::conf{'logs_at'},$channel);
 
 Debug::debug_out "=== New Call [$channel $command] [$Conf::conf{'0'}] ===";
@@ -126,19 +135,16 @@ if($command eq '')
 # Add Events module
 use Events;
 
-# Then tell Events module where the intermission directory is at.
-# Would prefer for Events module to access this variable directly. 
-#	Seems like modules can't access "our" vars in other modules. 
-#	Tried it did not work.  Hence this workaround.
-#
-# $inm is also used later in main.
-my $inm=$Conf::conf{'basedir'}.'/'.$Conf::conf{'intermission_at'};
-Events::set_inm($inm); # ::Events
-
 
 # Tell Playlog module where to write play log files.
 Playlog::set_private_playlog_file($Conf::conf{'basedir'}.'/'.$Conf::conf{'logs_at'}.'/private-playlog-'.$channel.'-'.$Debug::timestamp.'.txt');
 Playlog::set_public_playlog_file($Conf::conf{'basedir'}.'/'.$Conf::conf{'logs_at'}.'/public-playlog-'.$channel.'-'.$Debug::timestamp.'.txt');
+
+
+# Tell BannerUpdate module where our channel lives so it can get banners and
+# channel information.
+use BannerUpdate;
+BannerUpdate::set_channel($channel,$Conf::conf{'basedir'});
 
 
 # Prepare lock code (or fail)
@@ -149,16 +155,11 @@ if(($?!='0')or($Concurrency::concurrency_lock_code eq '')){Concurrency::fail "lo
 Debug::debug_out "lock code is $Concurrency::concurrency_lock_code";
 
 
-# Tell BannerUpdate module where our channel lives so it can get banners and
-# channel information.
-use BannerUpdate;
-BannerUpdate::set_channel($channel,$Conf::conf{'basedir'});
-
-
 # Set this now.  Must be set from main.
 # The `transmit` subcommand relies on this; and this allows us to write an
 # ezstream XML file without specifying the full path of jockeycall there.
 $Conf::conf{'mypath'}=dirname(__FILE__);
+
 
 # Take care of any subcommands other than 'next'.
 # Subcomannds can acquire lock if needed.
@@ -187,10 +188,13 @@ Operation::set_channel($channel);
 # We can tell Random the channel random directory now, if defined in the
 # configuration.
 use Random;
-Random::set_channel_dir($Conf::conf{'basedir'}.'/'.$Conf::conf{'random_at'});
+if($Conf::conf{'random_at'} ne '')
+{
+	Random::set_channel_dir($Conf::conf{'basedir'}.'/'.$Conf::conf{'random_at'});
+}
 
 
-# Figure out current datestring.
+# Figure out current datestring
 my $datestring;
 if(($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)&&($ENV{'JOCKEYCALL_TIMESLOT'} ne ''))
 {
@@ -209,7 +213,7 @@ else
 }
 
 
-# Fetch datestring of previous call.
+# Fetch datestring of previous call
 # Need to use root key (*_rkey() calls) until we determine a schedule
 # directory.
 my $last_datestring=DataMoving::get_rkey('last-datestring',0);
@@ -269,6 +273,7 @@ if($datestring>$Conf::conf{'flip_day_at'})
 # --- Holiday check.
 # TODO
 
+
 # Point ourselves to the correct schedule directories.
 if(!Conf::setdirs($currentdow))
  {DeliverTrack::technical_difficulties; Concurrency::succeed;exit 0;}
@@ -312,7 +317,7 @@ if(scalar(@schedule)==0)
 	goto INTERMISSION;
 }
 
-# Sort our retrieved schedule numerically.
+# Sort our retrieved schedule numerically
 my @schedule_sorted=sort{$a<=>$b} @schedule;
 
 # Find which timeslot is equal or greater than current time.
@@ -332,7 +337,7 @@ $current_timeslot=$schedule_sorted[-1];
 
 # Concrete example: it's 5am, and the earliest defined timeslot is 6am.
 # There's a 11pm timeslot also defined.  At 5am we should still be
-# playing the 11pm timeslot songs.
+# playing the 11pm timeslot songs (from yesterday).
 
 my $this_timeslot;
 
@@ -434,7 +439,7 @@ if(DataMoving::get_key('timeslot-event-counter','') eq 2)
 
 
 # Timeslot directory contains one or more t-xxx-option-option-option
-# directories.
+# directories (a.k.a timeslot portions).
 # These allow the operator to control the behavior of track sets in the
 # timeslot.
 # So we will scan our timeslot directories and collect the ones that do not
@@ -449,12 +454,7 @@ my $tsd;
 my %tsd_params;
 my $rdm;
 my $flag_dup;
-my @t; 
-my @h; 
-my @c; 
-my @l; 
-my @w; 
-my @z; 
+my @t; my @h; my @c; my @l; my @w; my @z; 
 my $last_mode;
 my $current_mode;
 my $distribution;
@@ -597,7 +597,7 @@ if(-e "$rdm")
 	Random::set_timeslot_dir("$rdm")
 };
 my $random_spin=int(rand(100));
-Debug::debug_out("Dice roll for random is $random_spin out of 100, random_percent is $Conf::conf{'random_percent'}");
+Debug::debug_out("Spinner for random is $random_spin out of 100, random_percent is $Conf::conf{'random_percent'}");
 if($random_spin<=$Conf::conf{'random_percent'})
 {
 	Debug::debug_out('Hit for random, selecting and playing random track');
@@ -619,7 +619,7 @@ if($random_spin<=$Conf::conf{'random_percent'})
 		{
 			print "[== Random ==] ";
 		}
-		DeliverTrack::now_play($t,'',0);
+		DeliverTrack::now_play($rdm.'/'.$t,'',0);
 		# If something goes wrong with delivery we'll just fall through I guess
 	}else{
 		Debug::debug_out('Random::get_random_track could not select a track');
@@ -723,6 +723,8 @@ INTERMISSION:
 # This point is reached (via goto, OMG) if we've played all tracks in
 # the current timeslot, or various other conditions.
 
+my $inm=$Conf::conf{'basedir'}.'/'.$Conf::conf{'intermission_at'};
+
 # If an operation is in progress, end it.
 Operation::cancel_any_active();
 
@@ -825,7 +827,7 @@ if($random_spin<=$Conf::conf{'random_percent'})
                 {
                         print "[== Random ==] ";
                 }
-                DeliverTrack::now_play($t,'',0);
+                DeliverTrack::now_play($inm.'/random/'.$t,'',0);
                 # If something goes wrong with delivery we'll just fall through I guess
         }else{
                 Debug::debug_out('Random::get_random_track could not select a track');

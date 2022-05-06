@@ -56,10 +56,16 @@ sub get_random_track
 		my $trackdir=$dir{$which_random_dir};	
 		if($trackdir eq '')
 		{
-			Debug::error_out("[Random::get_random_track] no \"$which_random_dir\" directory set for random tracks");
-			return '';
+			Debug::trace_out("    no \"$which_random_dir\" directory set for random tracks");
+			next;
 		}else{
 			Debug::trace_out("    checking \"$which_random_dir\"'s directory \"$trackdir\" that was previously set for random tracks");
+		}
+
+		if(! -e $trackdir)
+		{
+			Debug::trace_out("    \"$trackdir\" doesn\'t exist or is inaccessible");
+			next;
 		}
 
        		opendir my $d,$trackdir
@@ -75,19 +81,25 @@ sub get_random_track
 			# kicked off from random track pools just quite yet.
        	        	if(DataMoving::track_filter($f,-1))
        	        	{
+				Debug::trace_out("    random track $f ...");
 				# get md5 hash of track
 		       		my $md5hash=main::md5_hex($f);
 
 				# skip if found in provided history array
-				next if(grep( /^$md5hash$/, @{$_[0]} ));
+				if(grep( /^$md5hash$/, @{$_[0]} ))
+				{
+					Debug::trace_out('    [trivial] found in history');
+					next;
+				}
 
                         	# check if we would have enough time in this
 				# timeslot to play this.
                         	# If time does not matter, such as for the
                         	#  intermission, 99999 should be used.
 				my %m=DataMoving::get_metadata($md5hash);
-				if(%m=undef){next;}
-                        	if(m{'l'}>($_[1]*60))
+				next if(%m==undef);
+				Debug::trace_out("    [trivial] duration $m{';'}");
+                        	if($m{'l'}>($_[1]*60))
                         	{
                                		Debug::trace_out
                                 	"    disqualified $md5hash because it's ".($cl-($_[8]*60))." seconds longer than end of timeslot.";
@@ -102,16 +114,16 @@ sub get_random_track
 
 	if(scalar(@candidate_random_tracks)==0)
 	{
-		Debug::trace_out("[Random::get_random_track] No tracks left in \"$_[0]\" after checking history");
+		Debug::trace_out("    No tracks left in \"$_[0]\" after checking history");
 		return '' 
 	}
 
 	if(scalar(@candidate_random_tracks)==1)
 	{
-		return $candidate_random_tracks[0];
+		return pop(@candidate_random_tracks);
 	}
 
-	return $candidate_random_tracks(int(rand(scalar(@candidate_random_tracks)))+1);
+	return $candidate_random_tracks[rand(@candidate_random_tracks)];
 }
 
 

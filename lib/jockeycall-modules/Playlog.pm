@@ -17,11 +17,11 @@ our $public_playlog_file;
 # private playlog file
 our $private_playlog_file;
 
+# this lets main set the log files from the configuration
 sub set_public_playlog_file
 {
 	$public_playlog_file=$_[0];
 }
-
 sub set_private_playlog_file
 {
 	$private_playlog_file=$_[0];
@@ -34,7 +34,7 @@ sub public_playlog_out
 #
 # $_[0]: Text to output to public_playlog
 #
-	if($_[0] eq ''){return;}
+	return if(($_[0] eq '')or($public_playlog_file eq ''));
 
 	if($public_playlog_file ne '')
 	{
@@ -51,9 +51,12 @@ sub private_playlog_out
 
 # Parameters/info
 #
-# $_[0]: Text to output to public_playlog
+# $_[0]: Text to output to private_playlog
 #
-        if($_[0] eq ''){return;}
+# The private playlog will have the full paths to files and provide more
+# information on schedule transitions.
+#
+        return if(($_[0] eq '')or($private_playlog_file eq ''));
 
         if($private_playlog_file ne '')
         {
@@ -64,5 +67,6 @@ sub private_playlog_out
                 }
         }
 }
+
 
 1;

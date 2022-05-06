@@ -8,6 +8,9 @@ require 'Debug.pm';
 
 # Configuration read, parse, assertions, and ownership (%Conf::conf)
 # Also configuration definition
+ 
+my %possible_channel_conf_item;
+my $possible_global_conf_item;
 
 # Hash that defines valid configuration options for channels
 $possible_channel_conf_item{'subdir_wday_sun'}	='chanscheddir-required,mapto:subdir_wday0';
@@ -30,11 +33,12 @@ $possible_channel_conf_item{'random_at'}	='chandir-optional';
 $possible_channel_conf_item{'random_percent'}	='number-optional,range:0-100';
 $possible_channel_conf_item{'yellow_zone_mins'}	='number-optional,range:1-60';
 $possible_channel_conf_item{'red_zone_mins'}	='number-optional,range:1-60';
+
 # Hash that defines valid configuration options for global jockeycall.conf 
  $possible_global_conf_item{'jockeycall_bin_curl'}
 						='exe-optional,nobannersifbad';
  $possible_global_conf_item{'jockeycall_bin_mp3info'}
-						='exe-required';
+						='exe-optional';
  $possible_global_conf_item{'jockeycall_bin_ezstream'}
 						='exe-optional';
  $possible_global_conf_item{'jockeycall_banner_service_enabled'}
@@ -73,7 +77,14 @@ our $disable_banners=0;
 # in this module and should be called very early by main.
 $conf{'0'}='';
 
-# Defaults
+# Defaults for global config
+$conf{'jockeycall_bin_curl'}='/usr/bin/curl';
+$conf{'jockeycall_bin_mp3info'}='./mp3info-static-nocurses';
+$conf{'jockeycall_bin_ezstream'}='/usr/local/bin/ezstream';
+$conf{'jockeycall_banner_service_enabled'}=0;
+$conf{'jockeycall_banner_service_autoflip_every'}=20;
+
+# Defaults for channel-specific config
 # Path is prefixed by 'schedules_at'
 $conf{'subdir_wday_sun'}='normal/sunday';
 $conf{'subdir_wday_mon'}='normal/weekday';
@@ -420,7 +431,7 @@ sub read_jockeycallconf
 
 	Debug::trace_out("expecting global config to be \"".$jockeycallconf_file."\"");
 
-	# return with error if jockeycall.conf file doesn't exist
+	# return with error if jockeycall.conf file doesn't exist 
 	if(! -e $jockeycallconf_file)
 	{
 		Debug::conf_error_out("jockeycall.conf configuration file $jockeycallconf_file not found");

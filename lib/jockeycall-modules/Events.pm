@@ -10,22 +10,12 @@ require 'DeliverTrack.pm';
 # Functions called when specific things happen
 
 our @EXPORT=qw(
-	set_inm
 	entering_new_timeslot
 	entering_intermission
 	leaving_intermission
 	entering_new_day
 	timeslot_portion
         );
-
-# Location of channel intermission files
-our $inm;
-
-
-sub set_inm
-{
-	$inm=$_[0];
-}
 
 
 sub entering_new_day
