@@ -211,12 +211,9 @@ sub command_transmit
 		{
 			Concurrency::fail("ezstream XML file not found, I looked here: \"".$ezstream_xml_file."\"");
 		}	
-	}
 
-	print "$ENV{'JOCKEYCALL_CHANNEL'} transmission start.\n";
-	
-	if($Conf::conf{'deliver_type'} eq 'ezstream')
-	{
+		print "$ENV{'JOCKEYCALL_CHANNEL'} transmission start (ezstream)\n";
+
 		# The environment variable JOCKEYCALL_CHANNEL should have been
 		# previously set by main.  ezstream picks up the `channel to
 		# play through that.
@@ -240,6 +237,8 @@ sub command_transmit
 
 	if($Conf::conf{'deliver_type'} eq 'command')
 	{
+		print "$ENV{'JOCKEYCALL_CHANNEL'} transmission start (command)\n";
+
 		# The environment variable JOCKEYCALL_CHANNEL should have been
 		# previously set by main.
 		#

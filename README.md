@@ -1,14 +1,34 @@
 # `jockeycall`
 
-`jockeycall` is a Perl application that can be used to deliver a 24/7 radio-station-like experience.  `jockeycall` will select a track in properly arranged schedule directories, and either tell `ezstream` to play it, or call a command to play it.  State is tracked in an SQLite database; song length info is cached in a separate SQLite database.
+`jockeycall` is a Perl application that can be used to deliver a 24/7 radio-station-like experience.  
 
-Dependencies: mp3info (included), ezstream (if using ezstream integration), madplay/lame (recommended for ezstream), aplay (recommended if you want to play tracks locally), and sox (if you want audio effects).
+`jockeycall` functions by selecting a track in properly arranged schedule directories, and either tell `ezstream` to play it, or call a command to play it.  State is tracked in an SQLite database; song length info is cached in a separate SQLite database.
 
-A bit more details on the two methods `jockeycall` works to play a track:
+Currently only .mp3 files are supported.
 
-* Integration with ezstream - `jockeycall` will integrate with ezstream's "program" method, and through this can stream to an existing Icecast network streaming setup.
+## Requirements And Dependencies
 
-* Custom integration - `jockeycall` may be set to call any command when it wants to play a file - allowing you to play tracks using any method that's callable through the command line.  This method is the one to use if you want to hear the audio out of that system's speaker.
+`jockeycall` is written in Perl and was developed on a Debian 11 system.
+
+Code is factored out into modules, which are expected to be in the directory `../lib/jockeycall-modules` relative to the main executable.
+
+`jockeycall` relies on the `mp3info` command to get the duration of MP3 files.  This is included in the `bin` directory.  If this is missing `jockeycall` will not work.
+
+Below is a list of dependencies.  Dependencies not included are likely in your distro's package manager (they're definitely in Debian's).
+
+* 'perl' - development has used v5.32.1.  Any v5 version equal or later than that should work.
+
+* The 'DBI::SQLite' Perl module - so Perl can talk to SQLite databases.  On Debian, `apt-get install libdbd-sqlite3-perl` will take care of this.  It is also easily installable via CPAN.
+
+* `mp3info` (included)
+
+* `ezstream` - if using ezstream integration
+
+* `madplay`/`lame` - recommended to make `ezstream` work well, can also be used for direct local playback
+
+* `aplay` - for direct local playback under ALSA
+
+* `sox` - to apply effects to the audio
 
 ## Why `jockeycall` Is Better Than A Playlist
 
@@ -23,6 +43,12 @@ Just about all audio player tools will run through a playlist, and loop through 
 If you want something running for days or weeks (haven't tested years yet) unattended, and are willing to put in the work to create schedules, then `jockeycall` is here for you.
 
 ## How does `jockeycall` work?
+
+A bit more details on the two methods `jockeycall` works to play a track:
+
+* Integration with ezstream - `jockeycall` will integrate with ezstream's "program" method, and through this can stream to an existing Icecast network streaming setup.
+
+* Custom integration - `jockeycall` may be set to call any command when it wants to play a file - allowing you to play tracks using any method that's callable through the command line.  This method is the one to use if you want to hear the audio out of that system's speaker.
 
 ### Preparation - Defining Your Schedule And Shows
 
@@ -66,7 +92,9 @@ Therefore `jockeycall` is not really a background process-it's called each time 
 
 ## Requirements
 
-`jockeycall` is written in Perl and was developed on a Debian 11 system.  Code is factored out into modules, which are expected to be in the directory `../lib/jockeycall-modules` relative to the main executable.
+`jockeycall` is written in Perl and was developed on a Debian 11 system.
+
+Code is factored out into modules, which are expected to be in the directory `../lib/jockeycall-modules` relative to the main executable.
 
 `jockeycall` relies on the `mp3info` command to get the duration of MP3 files.  This is included in the `bin` directory.  If this is missing `jockeycall` will not work.
 
