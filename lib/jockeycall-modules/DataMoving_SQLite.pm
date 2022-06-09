@@ -71,17 +71,20 @@ sub setup
 	# The above will create the STATE database if it doesn't exist.
 	# And if it is a new database, we have to create the tables.
 	# So we need to query for existing tables and make the ones that are missing.
-	#
-	$db_op=$dbh_STATE->prepare("select name from sqlite_schema where type='table' order by name;");
-	$rv=$db_op->execute() or dbi_error;
-	if($rv<0){dbi_error;}
-	#
+
 	# State tables we're checking
 	%need_to_make=('oob_queue'=>1,'rkeys'=>1);
-	#
-	# Fetch list of base state tables and mark 0 the ones that exist
-	while(my @row=$db_op->fetchrow_array()){$need_to_make{$row[0]}=0;}
-	#
+
+	$db_op=$dbh_STATE->prepare("select name from sqlite_master where type='table' order by name;");
+	if(defined($db_op))
+	{
+		$rv=$db_op->execute() or dbi_error;
+		if($rv<0){dbi_error;}
+		#
+		# Fetch list of base state tables and mark 0 the ones that exist
+		while(my @row=$db_op->fetchrow_array()){$need_to_make{$row[0]}=0;}
+	}
+
 	# For the ones that were left marked 1, make the base tables.
 	#
 	# We say base tables because we might have others that are created on-demand,
@@ -124,17 +127,20 @@ sub setup
         # The above will create the METADATA database if it doesn't exist.
         # And if it is a new database, we have to create the tables.
         # So we need to query for existing tables and make the ones that are missing.
-        #
-        $db_op=$dbh_METADATA->prepare("select name from sqlite_schema where type='table' order by name;");
-        $rv=$db_op->execute() or dbi_error;
-        if($rv<0){dbi_error;}
-        #
-        # Metadata tables we're checking, for metadata database
-        %need_to_make=('metadata'=>1);
-        #
-        # Fetch list of base metadata tables and mark 0 the ones that exist
-        while(my @row=$db_op->fetchrow_array()){$need_to_make{$row[0]}=0;}
-        #
+
+	# Metadata tables we're checking, for metadata database
+	%need_to_make=('metadata'=>1);
+
+        $db_op=$dbh_METADATA->prepare("select name from sqlite_master where type='table' order by name;");
+	if(defined($db_op))
+	{
+        	$rv=$db_op->execute() or dbi_error;
+	        if($rv<0){dbi_error;}
+	        #
+	        # Fetch list of base metadata tables and mark 0 the ones that exist
+	        while(my @row=$db_op->fetchrow_array()){$need_to_make{$row[0]}=0;}
+	}
+
         # For the ones that were left marked 1, make the base tables.
         #
         # We say base tables because we might have others that are created on-demand,
@@ -176,7 +182,7 @@ sub setup_timeslot_vars
 
         Debug::trace_out("    timeslot_id is $timeslot_id");
 
-        my $db_op=$dbh_STATE->prepare('select name from sqlite_schema where name=?;');
+        my $db_op=$dbh_STATE->prepare('select name from sqlite_master where name=?;');
         my $rv=$db_op->execute($timeslot_vars_table) or dbi_error;
         if($rv<0){dbi_error;}
         while(my @row=$db_op->fetchrow_array())
@@ -191,7 +197,7 @@ sub setup_timeslot_vars
 
         # create new table for this timeslot_id
         Debug::trace_out("    [trivial] creating new timeslot variables table $timeslot_vars_table");
-        my $db_op=$dbh_STATE->prepare("select name from sqlite_schema where name=?;");
+        my $db_op=$dbh_STATE->prepare("select name from sqlite_master where name=?;");
         my $stmt="
         create table \"$timeslot_vars_table\"
          ( name         text            primary key not null
@@ -633,7 +639,7 @@ sub make_table_if_needed
 		return 1;
 	}
 
-        my $db_op=$dbh_STATE->prepare('select name from sqlite_schema where name=?;');
+        my $db_op=$dbh_STATE->prepare('select name from sqlite_master where name=?;');
         my $rv=$db_op->execute($_[0]) or dbi_error;
         if($rv<0){dbi_error;}
         while(my @row=$db_op->fetchrow_array())
@@ -649,7 +655,7 @@ sub make_table_if_needed
 
         # create new table for this timeslot_id
         Debug::trace_out("    [trivial] need to make new table \"$_[0]\"");
-        my $db_op=$dbh_STATE->prepare('select name from sqlite_schema where name=?;');
+        my $db_op=$dbh_STATE->prepare('select name from sqlite_master where name=?;');
         my $stmt="
         create table \"$_[0]\"
          ( id		integer		primary key 

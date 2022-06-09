@@ -199,48 +199,67 @@ sub command_transmit
 	# This adds the directory that jockeycall.pl is running from to the 
 	# PATH for subsequent processes, such as the one we're about to spawn
 	# with `system` below.
+
 	# This enables us to not have to specify the full path to the executable in
-	# the ezstream XML file.
+	# the ezstream XML file, if $Conf::conf{'deliver-type'} is 'ezstream'.
 	$ENV{'PATH'}=$Conf::conf{'mypath'}.':'.$ENV{'PATH'};
-	print "PATH is set to \"$ENV{'PATH'}\"\n";
 
-	my $ezstream_xml_file="$Conf::conf{'basedir'}/ezstream/channel-ezstream.xml";
-	if(! -e $ezstream_xml_file)
+	if($Conf::conf{'deliver_type'} eq 'ezstream')
 	{
-		Concurrency::fail("ezstream XML file not found, I looked here: \"".$ezstream_xml_file."\"");
-	}	
+		my $ezstream_xml_file="$Conf::conf{'basedir'}/ezstream/channel-ezstream.xml";
+		if(! -e $ezstream_xml_file)
+		{
+			Concurrency::fail("ezstream XML file not found, I looked here: \"".$ezstream_xml_file."\"");
+		}	
+	}
 
-	my $firstplay=0;
-	while(1)
+	print "$ENV{'JOCKEYCALL_CHANNEL'} transmission start.\n";
+	
+	if($Conf::conf{'deliver_type'} eq 'ezstream')
+	{
+		# The environment variable JOCKEYCALL_CHANNEL should have been
+		# previously set by main.  ezstream picks up the `channel to
+		# play through that.
+		#
+		
+		# Now launch ezstream.
+		# This will keep going until there is an error, someone stops
+		# it, or the power goes out.
+		system "$Conf::conf{'jockeycall_bin_ezstream'}",'-c',"$ezstream_xml_file";
+
+		if($?==0)
+		{
+			# if ezstream exits without error, we'll do the same.
+			Concurrency::succeed;
+		}else{
+			# otherwise let the user know ezstream died.
+			print "$ENV{'JOCKEYCALL_CHANNEL'} transmission interrupted because ezstream exited.\n";
+			Concurrency::fail;
+		}
+	}
+
+	if($Conf::conf{'deliver_type'} eq 'command')
 	{
 		# The environment variable JOCKEYCALL_CHANNEL should have been
 		# previously set by main.
 		#
-		print "$ENV{'JOCKEYCALL_CHANNEL'} transmission start.\n";
-		print "$Conf::conf{'jockeycall_bin_ezstream'} -c '$ezstream_xml_file'\n";
-		system "$Conf::conf{'jockeycall_bin_ezstream'}",'-c',"$ezstream_xml_file";
-
-		# if ezstream exits without error, we'll do the same.
-		if($?==0)
+		while(1)
 		{
-			Concurrency::succeed;
+			# Launch ourself and ask ourself to play the next
+			# track.
+			# Since deliver_type is command, that command will be
+			# executed and hopefully things are configured
+			# correctly.
+			system "$0 next";
+			# Don't stop until an error is reported.
+			last if($?!=0);
 		}
 
-		print "$ENV{'JOCKEYCALL_CHANNEL'} transmission interrupted because ezstream exited.\n";
-
-		# if ezstream exits with error, we won't retry if it's the
-		# first call.
-		if($ezstream_errors==0)
-		{
-			Concurrency::fail('ezstream failed on first call, assuming config or setup error.');
-		}
-
-		print "$ENV{'JOCKEYCALL_CHANNEL'} will start again...\n";
-		sleep 1;
-		Concurrency::release_lock(1);
-		$ezstream_errors=$ezstream_errors+1;
-
+		print "$ENV{'JOCKEYCALL_CHANNEL'} transmission interrupted - an error occrred during the last call.\n";
+		Concurrency::fail;
 	}
+
+	Concurrency::fail("deliver_type \"$Conf::conf{'deliver_type'}\" not supported");
 }
 
 sub command_oob

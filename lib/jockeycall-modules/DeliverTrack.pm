@@ -1,4 +1,5 @@
 package DeliverTrack;
+require 'Conf.pm';
 require 'Debug.pm';
 require 'Concurrency.pm';
 require 'Playlog.pm';
@@ -77,9 +78,10 @@ sub now_play_from_operation
                 DataMoving::set_rkey('now-playing',$_[1]);
         }
 
+	my %t=DataMoving::get_metadata(main::md5_hex($_[0]));
+
 	if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
 	{
-		my %t=DataMoving::get_metadata(main::md5_hex($_[0]));
 		print "$_[0];$t{'l'}\n";
 	}else{
                 Playlog::private_playlog_out($_[0]);
@@ -92,7 +94,7 @@ sub now_play_from_operation
         	        	Playlog::public_playlog_out($_[1]);
                         }
                 }
-        	print "$_[0]\n";
+		deliver($_[0],$t{'l'});
 	}
 
 	# This will only do anything if someone called
@@ -139,9 +141,10 @@ sub now_play
 		DataMoving::set_rkey('now-playing',$_[1]);
 	}
 
+        my %t=DataMoving::get_metadata(main::md5_hex($_[0]));
+
         if($ENV{'JOCKEYCALL_SIMULATION_MODE'}==1)
         {
-                my %t=DataMoving::get_metadata(main::md5_hex($_[0]));
                 print "$_[0];$t{'l'}\n";
         }else{
 	        Playlog::private_playlog_out($_[0]);
@@ -154,7 +157,7 @@ sub now_play
         	       	        Playlog::public_playlog_out($_[1]);
         		}
 	        }
-                print "$_[0]\n";
+		deliver($_[0],$t{'l'});
         }
 
 	# This will only do anything if someone called
@@ -164,6 +167,52 @@ sub now_play
 
 	Concurrency::succeed();
 } 
+
+
+sub deliver
+{
+	Debug::trace_out("*** DeliverTrack::deliver($_[0],$_[1])");
+
+# Actually deliver a track, nothing else.
+# deliver doesn't validate, that's caller's job.
+# Also the caller's job: reporting success/failure.
+#
+# Will do different things depending on $Conf::$conf{'deliver_type'} and such.
+# 
+# $_[0]: Path of a track
+# $_[1]: Duration of track in seconds
+
+	if($Conf::conf{'deliver_type'} eq 'ezstream')
+	{
+		# ezstream just wants the path of the track output to stdout.
+		# Easy enough.
+		print "$_[0]\n";
+		return 0;
+	}
+	if($Conf::conf{'deliver_type'} eq 'command')
+	{
+		my $command;
+		for my $i (0..length($Conf::conf{'deliver_command'}))
+		{
+			my $singlechar=substr($Conf::conf{'deliver_command'},$i,1);
+			if($singlechar eq '%')
+			{
+				$command.="\"$_[0]\"";
+			}else{
+				$command.=$singlechar;
+			}
+		}
+
+		$ENV{'JOCKEYCALL_TRACK_SECONDS'}=$_[1];
+
+		Debug::trace_out("    executing command \"$command\"");
+		system "$command";
+		return 0;
+	}
+
+	Debug::error_out("[DeliverTrack::deliver] deliver_type \"$Conf::conf{'deliver_type'}\" specified, not supported");
+	return 1;
+}
 
 
 sub technical_difficulties

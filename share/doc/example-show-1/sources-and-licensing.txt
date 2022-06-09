@@ -1,6 +1,16 @@
 The example show provided with this distribution utilizes audio from various
-sources.  Below is details on those sources and any applicable licensing
-details.
+sources.
+
+- Jockeycall is open source, but these audio files are not!  
+
+- Licenses for the Jockeycall code do NOT apply for the audio files and I can't give you any additional or different rights to the audio files beyond the license information pointed to through the below resources.
+
+- Audio that is redistributed here is done so pursuant to the existing licensing terms found where I obtained each audio file. 
+
+- You probably need to accept those same license terms in order to redistribute yourself.  You should consult a legal professional to be sure.  License terms of some audio files may impose conditions on redistribution for various purposes, including commercial.  If you don't accept the original license terms for one or more audio files, don't redistribute those audio file(s).
+
+Below are details on those sources and licensing identified at those sources.
+
 
 These MP3s ...
 
@@ -14,3 +24,25 @@ were obtained from the following URL ...
 
 and were identified from the URL as public domain.
 
+
+These MP3s ...
+
+ 1. Prazkhanal - whip-110235.mp3 
+ 2. Prazhkanal - corona-in-my-blunt-110236.mp3
+ 3. Prazhkanal - baptize-109784.mp3
+ 4. Anton Vlasov - slow-trap-18565.mp3
+ 5. Anton Vlasov - guitar-trap-beat-108897.mp3
+
+were obtained from the following URL ...
+
+ * https://pixabay.com
+
+and are governed by the following license terms as found via https://pixabay.com:
+
+ * https://pixabay.com/service/license/
+ * https://pixabay.com/service/terms/
+
+Artist links to songs from pixabay.com:
+
+ Prazkhanal: https://pixabay.com/users/prazkhanal-24653570/?tab=audio&amp;utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=audio&amp;utm_content=110235
+ Anton Vlasov: https://pixabay.com/users/anton_vlasov-25376971/?tab=audio&utm_source=link-attribution&utm_medium=referral&utm_campaign=audio&utm_content=18565

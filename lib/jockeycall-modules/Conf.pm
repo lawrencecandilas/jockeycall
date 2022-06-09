@@ -33,6 +33,9 @@ $possible_channel_conf_item{'random_at'}	='chandir-optional';
 $possible_channel_conf_item{'random_percent'}	='number-optional,range:0-100';
 $possible_channel_conf_item{'yellow_zone_mins'}	='number-optional,range:1-60';
 $possible_channel_conf_item{'red_zone_mins'}	='number-optional,range:1-60';
+$possible_channel_conf_item{'deliver_type'}	='string-optional';
+$possible_channel_conf_item{'deliver_command'}	='string-optional';
+$possible_channel_conf_item{'deliver_wait'}	='boolean-optional';
 
 # Hash that defines valid configuration options for global jockeycall.conf 
  $possible_global_conf_item{'jockeycall_bin_curl'}
@@ -111,6 +114,10 @@ $conf{'random_percent'}=97;
 # Default schedule zone threshoolds
 $conf{'yellow_zone_mins'}=12;
 $conf{'red_zone_mins'}=8;
+# Default track delivery options
+$conf{'deliver_type'}='ezstream';
+$conf{'deliver_command'}='echo "deliver_command test: requested track is \"%\", JOCKEYCALL_TRACK_SECONDS=$JOCKEYCALL_TRACK_SECONDS"';
+$conf{'deliver_wait'}=0;
 
 # Environment-controlled stuff
 # On module instantiation, we'll pull in some environment variables,
@@ -118,12 +125,6 @@ $conf{'red_zone_mins'}=8;
 #
 # TODO: The validation above
 $conf{'env_CHANNEL'}=$ENV{'JOCKEYCALL_CHANNEL'};
-#
-# JOCKEYCALL_FLAVOR environment variable should be:
-# 0 for production running from /bin
-# 1 for production running from /opt/jockeycall
-# 2 for development
-$conf{'env_FLAVOR'}=$ENV{'JOCKEYCALL_FLAVOR'};
 #
 # JOCKEYCALL_TRACE should be 1 to enable trace messages.
 $conf{'env_TRACE'}=$ENV{'JOCKEYCALL_TRACE'};

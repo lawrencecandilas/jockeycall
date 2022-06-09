@@ -1,9 +1,18 @@
 # `jockeycall`
 
-`jockeycall` is a Perl application that can be used to deliver a 24/7 radio-station-like experience when hooked into an ezstream/Icecast Internet radio setup.  
-## Why `jockeycall` Is Better Than Giving `ezstream` A Flat, Static .M3U 
+`jockeycall` is a Perl application that can be used to deliver a 24/7 radio-station-like experience.  `jockeycall` will select a track in properly arranged schedule directories, and either tell `ezstream` to play it, or call a command to play it.  State is tracked in an SQLite database; song length info is cached in a separate SQLite database.
 
-It's possible to have `ezstream` loop through a static .M3U playlist and send audio to an Icecast server.  `ezstream` can even randomize the playlist each time it loops through it.  This is great, and is a quick-and-dirty way to setup web-based audio streaming, but it doesn't behave like a real radio station.
+Dependencies: mp3info (included), ezstream (if using ezstream integration), madplay/lame (recommended for ezstream), aplay (recommended if you want to play tracks locally), and sox (if you want audio effects).
+
+A bit more details on the two methods `jockeycall` works to play a track:
+
+* Integration with ezstream - `jockeycall` will integrate with ezstream's "program" method, and through this can stream to an existing Icecast network streaming setup.
+
+* Custom integration - `jockeycall` may be set to call any command when it wants to play a file - allowing you to play tracks using any method that's callable through the command line.  This method is the one to use if you want to hear the audio out of that system's speaker.
+
+## Why `jockeycall` Is Better Than A Playlist
+
+Just about all audio player tools will run through a playlist, and loop through it, and even loop through it continuously and shuffle that list on each pass.  This is great, and is a quick-and-dirty way to setup web-based audio streaming, but it doesn't behave like a real radio station.
 
 - Real radio stations follow a daily/week schedule - i.e. there is the concept of a list of shows and a day/time they should play.
 
@@ -11,7 +20,7 @@ It's possible to have `ezstream` loop through a static .M3U playlist and send au
 
 - Real radio stations will periodically play audio not related to the current show - they will play "links", or other optional interstitial audio every X minutes - things like bumpers, station IDs, and commercials.
 
-`jockeycall` is hookable into `ezstream` and can provide this experience.
+If you want something running for days or weeks (haven't tested years yet) unattended, and are willing to put in the work to create schedules, then `jockeycall` is here for you.
 
 ## How does `jockeycall` work?
 
@@ -19,33 +28,41 @@ It's possible to have `ezstream` loop through a static .M3U playlist and send au
 
 Before `jockeycall` can do its magic, it's necessary to arrange the audio files into a directory/folder structure that expresses the shows, schedules, and "periodics", and provide `jockeycall` a writeable place to maintain the play history and data on audio files it finds.  Currently this is done with flat files.
 
-### `ezstream`'s "`program`" Intake Method
-
-Overall, `jockeycall` heavily relies on `ezstream`'s "`program`" method of intake.
-
-Some acrobatics with environment variables and symlinks are needed because `ezstream` doesn't allow specifying of arbitrary command line parameters. 
-
 ### The Overall Flow Of `jockeycall`
 
-Once `jockeycall.pl` gets called by `ezstream`, the following is a simplified flow of what happens:
+`jockeycall` takes various "subcommands" that further detail what you want `jockeycall` to do.
 
+Something must call `jockeycall` with the subcommand "next" each time a new track is to be played.  The channel directory must be defined in the JOCKEYCALL_CHANNEL environment variable.
+
+`bash$ JOCKEYCALL_CHANNEL=/path/to/channel jockeycall.pl next` 
+
+This is a summary of what happens when that's done:
+ 
 1. The channel configuration is read and parsed.
 
-2. The current system time is obtained, and `jockeycall` finds out what show it's currently playing according to the schedule.
+2. The current system time is obtained, and `jockeycall` finds out what show should be playing.
 
-3. Are we transitioning to a new show?  If so, do housekeeping and clear history.
+3. Using state information from the last call -- are we transitioning to a new show?  If so, do housekeeping and clear history.
 
-4. Next, a track (audio file) is selected from the schedule's timeslot track directory, checking against a history maintained for that channel,
+4. Next, a track (audio file) is selected from the schedule's timeslot track directory, checking against a history maintained for that channel.  That can be chosen randomly, or in series.
 
-5. Then, the path to that audio file is output.
+5. Then, for `ezstream` integration the path to that audio file is output.  For custom integration, the custom command is executed--the path of the audio file is output where % appears in the command definition.
 
-`ezstream` will then stream the file provided by `jockeycall.pl`, and when `ezstream` needs something new to play, it will invoke `jockeycall` again and restart the process.
+6. `jockeycall` exits.
 
-Therefore `jockeycall` is not really a background process-it's called each time `ezstream` needs a new track to play and its job is to tell it what track to play and nothing further.  `jockeycall` will get its state from data left over from the last call and update that state before exiting.  Any amount of time can pass between calls to `jockeycall`.  Audio files and schedule directories can be added or removed at any time that `jockeycall` isn't actually running.
+Something must call `jockeycall` over and over - and that something can be `jockeycall` itself, if called with the "transmit" subcommand.
 
-While you can launch `ezstream` directory, `jockeycall` will do this for you easily and simply if you issue a `jockeycall.pl transmit /path/to/channel` - and in this case `jockeycall` will launch `ezstream` with the correct parameters, and loop back and restart `ezstream` if it dies.  In this case you will have a `jockeycall.pl` process hanging around and a second one actually servicing `ezstream`.
+`bash$ jockeycall.pl transmit /path/to/channel` (`transmit` subcommand doesn't require JOCKEYCALL_CHANNEL environment variable)
 
-`jockeycall` can be a little slow, especially with shows with many files that it encounters for the first time, but since your Icecast stream is probably buffered, it's not often you will hear pauses in the audio.  If you do, IMHO it recreates the experience of real radio stations where sometimes the DJ was asleep at the wheel for a few seconds.
+* `ezstream` normally works with a single file or a playlist, but has an option to call a program to fetch a new track.  `jockeycall` was initially designed to work with this feature of `ezstream`.
+
+Therefore `jockeycall` is not really a background process-it's called each time something needs a new track to play and its job is to tell it what track to play and nothing further.  `jockeycall` will get its state from data left over from the last call and update that state before exiting.  If `jockeycall.pl transmit` is used, it will hang around in the foreground, continuously calling `jockeycall.next` or waiting on `ezstream` to finish.  It can be launched in a `screen` or `tumx` session to place it in the background.
+
+* Any amount of time can pass between calls to `jockeycall`.  Days, weeks, whatever.
+
+* Audio files and schedule directories can be added or removed at any time that `jockeycall` isn't actually running.
+
+`jockeycall` can be a little slow, especially with shows with many files that it encounters for the first time.  If streaming to Icecast, it's likely buffered, so it's not often you will hear pauses in the audio.  If you do, IMHO it recreates the experience of real radio stations where sometimes the DJ was asleep at the wheel for a few seconds.
 
 ## Requirements
 
@@ -53,5 +70,23 @@ While you can launch `ezstream` directory, `jockeycall` will do this for you eas
 
 `jockeycall` relies on the `mp3info` command to get the duration of MP3 files.  This is included in the `bin` directory.  If this is missing `jockeycall` will not work.
 
-`jockeycall` is currently designed to be called by `ezstream` so that's a requirement.  You may also want `madplay` and `sox` if you want to process the audio `ezstream` is sending to icecast, for example to be a specific bitrate or to add audio compression.  Example XML configuration files are provided.  `ezstream` is designed to send audio to a working icecast server, so that is a requirement as well.  The XML configuration file you give to `ezstream` will specify the Icecast "mountpoint".
+# Built-In `ezstream` integration
+
+`jockeycall` was initially exclusively designed to be called by `ezstream`, and is ready to do that as long as you have `ezstream` locally installed or built.  `jockeycall` must be told where `ezstream` lives on your system in the global jockeycall.conf file.
+
+Other things you'll need:
+
+* `ezstream` is designed to send audio to a working icecast server, so you need that running as a requirement as well.  The XML configuration file you give to `ezstream` will specify the Icecast "mountpoint".
+
+* You really want the stream `ezstream` sends to your icecast server to be a constant bitrate, otherwise listener connections may drop on bitrate changes.  `lame` and `madplay` will need to be installed for this purpose.
+
+* `sox` can be used to apply effects to the audio such as compression and equalization.
+
+Example XML configuration files are provided.
+
+## Under The Hood - `ezstream`'s "`program`" Intake Method
+
+To play well with `ezstream`, `jockeycall` heavily relies on `ezstream`'s "`program`" method of intake.
+
+Some acrobatics with environment variables and symlinks are needed because `ezstream` doesn't allow specifying of arbitrary command line parameters.
 

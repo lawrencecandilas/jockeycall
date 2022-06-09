@@ -1,20 +1,26 @@
 # jockeycall channel configuration file for example-station
 #
 # Keep in mind: jockeycall's whole job is to look at a directory containing an
-# arrangement of schedules, according to the current time and history of 
-# played items, and output the path of an MP3 that should be played.
+# arrangement of schedules, according to the current time and history of played
+# items, and find the path of an MP3 that should be played.
 #
 # - This is called 'delivering a track.'
 #
-# - This integrates with ezstream--an instance of ezstream which should be
+# - This can integrate with ezstream--an instance of ezstream which should be
 # pointed to a working icecast server.
+#   - This was originally the only delivery method jockeycall supported.
+#   - If you want to use ezstream integration and don't have a working Icecast
+#     setup, figure that out first. :)
 #
-# If you don't have a working Icecast setup, figure that out first. :)
+# - This can also integrate with a command pipeline that jockeycall executes--
+# so you don't have to use ezstream if you don't want to.
+#   - If you want jockeycall to play stuff on your system's actual speaker,
+#     this is the way to go.
+#
 
 # Configuration options:
 
 # schedules_at: Directory that contains schedules.
-#
 #
 # - This is relative to the channel directory path, set as the first argument
 #   for `jockeycall.pl transmit`, or otherwise set using the
@@ -171,6 +177,7 @@ random_percent 42
 #
 # - If jockeycall runs into trouble it will deliver this track.
 #   Possible situations are not being able to open or read anything.
+#
 #   (Note: Configuration failures typically prevent jockeycall from even 
 #   starting.)
 #
@@ -213,5 +220,55 @@ track_um alerts/um.mp3
 #
 # - Periodic directories yellow-mark and red-mark are triggered when
 #   thresholds are crossed.
+#
 yellow_zone_mins 12
 red_zone_mins 8
+
+# deliver_type: what happens during track delivery
+#
+# What jockeycall should do when delivering a track.
+# 
+# - This can be one of the following:
+#
+#   - "ezstream" (default): Uses default ezstream integration.  jockeycall will
+#     output the track name on stdout as ezstream expects, and the metadata
+#     program hook symlinks can also be used.
+#
+#   - "command": Uses a command pipeline defined in deliver_command.
+#     jockeycall will execute this command with the track name slipped in as
+#     parameter where specified.
+#
+deliver_type command
+
+# deliver_command: command pipeline to execute if deliver_type is "command"
+#
+# What the above says.
+# This option is ignored if deliver_type is "ezstream".
+#
+# Details
+#
+# - The command text can contain redirection operators
+# - PATH has jockeycall's bin directory appended to it
+# - % is replaced by the full track path, quoted with double quote marks ""
+# - The environment variable JOCKEYCALL_TRACK_SECONDS is set to the duration of
+#   the track, in seconds
+#
+# If you have madplay and aplay installed, you can make jockeycall play out of
+# this system's speaker with the following:
+#
+#deliver_command madplay -Q -ocdda:- % | aplay -q -f cdr
+#
+deliver_command echo %
+
+# deliver_wait: 
+#
+# If this is 1 the transmit subcommand will sleep until the duration of the
+# track has passed.
+#
+# If this is not desired, 0 should be specified.  
+#
+# This may be needed if the deliver_command returns immediately and plays the
+# audio in the background, or hands it off to another system in some way.
+#
+deliver_wait 0
+
